@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>منصة الأفران — تسجيل الدخول</title>
+  <style>
+    :root {
+      --pink: #e91e8c;
+      --pink-dark: #c2186f;
+      --bg: #0d0d12;
+      --card: #16161f;
+      --text: #f0f0f5;
+      --muted: #9a9aae;
+      --border: #2a2a38;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1a1020 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 30px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .logo {
+      text-align: center;
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      background: linear-gradient(90deg, var(--pink), #ff6ec4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 26px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+    .tab {
+      flex: 1; padding: 10px; text-align: center; cursor: pointer;
+      border-radius: 10px; color: var(--muted); font-weight: 600; font-size: 14px;
+      border: 1px solid transparent;
+    }
+    .tab.active { background: rgba(233,30,140,0.12); color: var(--pink); border-color: rgba(233,30,140,0.3); }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+    input {
+      width: 100%; padding: 12px 14px; border-radius: 10px;
+      border: 1px solid var(--border); background: #0f0f16; color: var(--text);
+      font-size: 15px; outline: none;
+    }
+    input:focus { border-color: var(--pink); }
+    button.submit {
+      width: 100%; margin-top: 24px; padding: 13px; border: none; cursor: pointer;
+      border-radius: 10px; font-size: 16px; font-weight: 700; color: white;
+      background: linear-gradient(90deg, var(--pink), var(--pink-dark));
+    }
+    button.submit:hover { opacity: 0.92; }
+    button.submit:disabled { opacity: 0.5; cursor: default; }
+    .msg { margin-top: 16px; padding: 11px; border-radius: 9px; font-size: 14px; display: none; text-align: center; }
+    .msg.err { background: rgba(255,70,70,0.12); color: #ff8a8a; display: block; }
+    .msg.ok { background: rgba(60,200,120,0.12); color: #6ee7a0; display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🔥 منصة الأفران</div>
+    <div class="sub">سجّل الدخول لمتابعة أفرانك</div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-login" onclick="switchTab('login')">تسجيل الدخول</div>
+      <div class="tab" id="tab-register" onclick="switchTab('register')">حساب جديد</div>
+    </div>
+
+    <div id="nameRow" style="display:none;">
+      <label>الاسم</label>
+      <input type="text" id="fullName" placeholder="اسمك">
+    </div>
+
+    <label>البريد الإلكتروني</label>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+
+    <label>كلمة المرور</label>
+    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+
+    <button class="submit" id="submitBtn" onclick="submit()">دخول</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script>
+    let mode = 'login';
+
+    function switchTab(m) {
+      mode = m;
+      document.getElementById('tab-login').classList.toggle('active', m === 'login');
+      document.getElementById('tab-register').classList.toggle('active', m === 'register');
+      document.getElementById('nameRow').style.display = m === 'register' ? 'block' : 'none';
+      document.getElementById('submitBtn').textContent = m === 'register' ? 'إنشاء الحساب' : 'دخول';
+      hideMsg();
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = 'msg ' + type;
+    }
+    function hideMsg() { document.getElementById('msg').className = 'msg'; }
+
+    async function submit() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const fullName = document.getElementById('fullName').value.trim();
+      const btn = document.getElementById('submitBtn');
+
+      if (!email || !password) { showMsg('أدخل البريد وكلمة المرور', 'err'); return; }
+
+      btn.disabled = true;
+      try {
+        if (mode === 'register') {
+          const r = await fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, full_name: fullName || null })
+          });
+          if (r.status === 201) {
+            showMsg('تم إنشاء الحساب! جارٍ الدخول...', 'ok');
+            await doLogin(email, password);
+          } else {
+            const d = await r.json();
+            showMsg(d.detail || 'تعذّر إنشاء الحساب', 'err');
+            btn.disabled = false;
+          }
+        } else {
+          await doLogin(email, password);
+        }
+      } catch (e) {
+        showMsg('خطأ في الاتصال بالخادم', 'err');
+        btn.disabled = false;
+      }
+    }
+
+    async function doLogin(email, password) {
+      const r = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        localStorage.setItem('access_token', d.access_token);
+        localStorage.setItem('refresh_token', d.refresh_token);
+        window.location.href = '/app';
+      } else {
+        showMsg('البريد أو كلمة المرور غير صحيحة', 'err');
+        document.getElementById('submitBtn').disabled = false;
+      }
+    }
+
+    // دخول بالضغط على Enter
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+    // لو مسجّل دخول مسبقاً، حوّله للتطبيق
+    if (localStorage.getItem('access_token')) {
+      fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } })
+        .then(r => { if (r.ok) window.location.href = '/app'; });
+    }
+  </script>
+</body>
+</html>

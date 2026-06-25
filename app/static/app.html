@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>منصة الأفران</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: 'Arial', sans-serif; background: #080818; min-height: 100vh; color: #eee; padding: 15px; width: 100vw; overflow-x: hidden; }
+ body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+   background: radial-gradient(ellipse at 20% 50%, rgba(255,69,0,0.07) 0%, transparent 50%),
+     radial-gradient(ellipse at 80% 20%, rgba(71,118,230,0.07) 0%, transparent 50%),
+     radial-gradient(ellipse at 50% 80%, rgba(168,85,247,0.07) 0%, transparent 50%);
+   pointer-events: none; z-index: 0; }
+ .container { position: relative; z-index: 1; width: 100%; max-width: 1100px; margin: 0 auto; }
+
+ .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+ .topbar .brand { font-size: 22px; font-weight: bold;
+   background: linear-gradient(90deg, #ff6b35, #f953c6, #4776e6);
+   -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 2px; }
+ .topbar .right { display: flex; align-items: center; gap: 12px; }
+ .topbar .email { color: #666; font-size: 12px; }
+ .mini-btn { padding: 8px 14px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);
+   color: #aaa; border-radius: 20px; font-size: 13px; cursor: pointer; }
+ .mini-btn:hover { border-color: #f953c6; color: #f953c6; }
+
+ h1 { text-align: center; font-size: 30px; margin-bottom: 5px;
+   background: linear-gradient(90deg, #ff6b35, #f953c6, #4776e6);
+   -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 3px; }
+ .subtitle { text-align: center; color: #555; font-size: 12px; margin-bottom: 6px; letter-spacing: 2px; }
+ .last-update { text-align: center; font-size: 11px; color: #444; margin-bottom: 20px; }
+ .live-dot { display: inline-block; width: 6px; height: 6px; background: #51cf66; border-radius: 50%; margin-left: 5px; animation: pulse 1.5s infinite; box-shadow: 0 0 6px #51cf66; }
+ @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(81,207,102,0.6);} 70%{box-shadow:0 0 0 8px rgba(81,207,102,0);} 100%{box-shadow:0 0 0 0 rgba(81,207,102,0);} }
+
+ /* ===== شاشة قائمة الأفران ===== */
+ .kiln-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 10px; }
+ .kiln-card { background: linear-gradient(135deg, rgba(249,83,198,0.08), rgba(71,118,230,0.05));
+   border: 1px solid rgba(249,83,198,0.2); border-radius: 18px; padding: 22px; cursor: pointer; transition: all .2s; }
+ .kiln-card:hover { transform: translateY(-3px); border-color: rgba(249,83,198,0.5); box-shadow: 0 0 25px rgba(249,83,198,0.15); }
+ .kiln-card .kn { font-size: 18px; font-weight: bold; color: #f953c6; margin-bottom: 4px; }
+ .kiln-card .kl { font-size: 12px; color: #666; margin-bottom: 16px; }
+ .kiln-card .kt { font-size: 34px; font-weight: bold; color: #ff6b35; text-shadow: 0 0 20px rgba(255,107,53,0.5); }
+ .kiln-card .kt span { font-size: 13px; color: #555; }
+ .kiln-card .kt.cold { color: #555; text-shadow: none; }
+ .add-card { display: flex; align-items: center; justify-content: center; flex-direction: column;
+   border: 1px dashed rgba(255,255,255,0.15); color: #666; font-size: 15px; }
+ .add-card:hover { border-color: #f953c6; color: #f953c6; }
+ .add-card .plus { font-size: 36px; margin-bottom: 6px; }
+ .empty-hint { text-align: center; color: #555; padding: 40px 20px; }
+
+ /* ===== لوحة التحكم (نفس التصميم الأصلي) ===== */
+ .back { color: #666; cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+ .back:hover { color: #f953c6; }
+ .top-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+ .program-card { background: linear-gradient(135deg, rgba(249,83,198,0.1), rgba(71,118,230,0.08)); border: 1px solid rgba(249,83,198,0.25); border-radius: 20px; padding: 25px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 0 25px rgba(249,83,198,0.1); }
+ .remaining-card { background: linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.05)); border: 1px solid rgba(168,85,247,0.25); border-radius: 20px; padding: 25px 20px; text-align: center; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 0 25px rgba(168,85,247,0.1); }
+ .program-card .stat-label { font-size: 15px; color: #f953c6; letter-spacing: 1px; margin-bottom: 12px; }
+ .program-badge { display: inline-block; padding: 10px 24px; border-radius: 25px; font-size: 15px; font-weight: bold; margin-top: 4px; }
+ .ps-0 { background: rgba(150,150,150,0.15); color: #aaa; border: 1px solid rgba(150,150,150,0.3); }
+ .ps-1 { background: rgba(71,118,230,0.2); color: #7aa4ff; border: 1px solid rgba(71,118,230,0.5); box-shadow: 0 0 20px rgba(71,118,230,0.35); }
+ .ps-2 { background: rgba(255,69,0,0.2); color: #ff8c5a; border: 1px solid rgba(255,69,0,0.5); box-shadow: 0 0 20px rgba(255,69,0,0.35); }
+ .ps-3 { background: rgba(247,151,30,0.2); color: #ffc14d; border: 1px solid rgba(247,151,30,0.5); box-shadow: 0 0 20px rgba(247,151,30,0.35); }
+ .ps-4 { background: rgba(142,84,233,0.2); color: #b47fff; border: 1px solid rgba(142,84,233,0.5); box-shadow: 0 0 20px rgba(142,84,233,0.35); }
+ .ps-5 { background: rgba(56,239,125,0.2); color: #5fffaa; border: 1px solid rgba(56,239,125,0.5); box-shadow: 0 0 20px rgba(56,239,125,0.35); }
+ .remaining-label { font-size: 12px; color: #a855f7; letter-spacing: 1px; margin-bottom: 12px; }
+ .remaining-time { display: flex; justify-content: center; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+ .remaining-num { font-size: 40px; font-weight: bold; color: #c084fc; text-shadow: 0 0 25px rgba(192,132,252,0.7); }
+ .remaining-unit { font-size: 12px; color: #7c3aed; }
+ .remaining-sep { font-size: 28px; color: #6d28d9; }
+ .temp-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+ .hero-card { border-radius: 20px; padding: 25px 20px; text-align: center; }
+ .hero-card.fire { background: linear-gradient(135deg, rgba(255,69,0,0.15), rgba(255,140,0,0.08)); border: 1px solid rgba(255,69,0,0.3); box-shadow: 0 0 30px rgba(255,69,0,0.15); }
+ .hero-card.virtual { background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,200,100,0.05)); border: 1px solid rgba(0,255,136,0.25); box-shadow: 0 0 30px rgba(0,255,136,0.1); }
+ .hero-label { font-size: 12px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+ .hero-value { font-size: 56px; font-weight: bold; line-height: 1; margin-bottom: 5px; }
+ .hero-card.fire .hero-value { color: #ff6b35; text-shadow: 0 0 30px rgba(255,107,53,0.8); }
+ .hero-card.virtual .hero-value { color: #00ff88; text-shadow: 0 0 30px rgba(0,255,136,0.8); }
+ .hero-unit { font-size: 14px; color: #666; }
+ @media (max-width: 600px) { .hero-value { font-size: 40px; } .remaining-num { font-size: 30px; } }
+ .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 15px; }
+ .stat-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 16px; text-align: center; transition: all 0.3s; position: relative; overflow: hidden; }
+ .stat-card::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; opacity: 0.6; }
+ .stat-card.c-orange::after { background: linear-gradient(90deg, transparent, #f7971e, transparent); }
+ .stat-card.c-blue::after { background: linear-gradient(90deg, transparent, #4776e6, transparent); }
+ .stat-card.c-green::after { background: linear-gradient(90deg, transparent, #38ef7d, transparent); }
+ .stat-card.c-pink::after { background: linear-gradient(90deg, transparent, #f953c6, transparent); }
+ .stat-card.c-purple::after { background: linear-gradient(90deg, transparent, #a855f7, transparent); }
+ .stat-card.c-red::after { background: linear-gradient(90deg, transparent, #ff416c, transparent); }
+ .stat-card.c-teal::after { background: linear-gradient(90deg, transparent, #11998e, transparent); }
+ .stat-card:hover { transform: translateY(-3px); }
+ .stat-card.clickable { cursor: pointer; }
+ .stat-card.danger-card { border-color: rgba(255,65,108,0.5); animation: dangerPulse 1.5s infinite; }
+ @keyframes dangerPulse { 0%{box-shadow:0 0 10px rgba(255,65,108,0.2);} 50%{box-shadow:0 0 25px rgba(255,65,108,0.6);} 100%{box-shadow:0 0 10px rgba(255,65,108,0.2);} }
+ .stat-label { font-size: 15px; color: #bbb; letter-spacing: 1px; margin-bottom: 10px; }
+ .stat-value { font-size: 32px; font-weight: bold; margin-bottom: 4px; }
+ .stat-unit { font-size: 10px; color: #444; }
+ .stat-card.c-orange .stat-value { color: #f7971e; text-shadow: 0 0 15px rgba(247,151,30,0.5); }
+ .stat-card.c-blue .stat-value { color: #4776e6; text-shadow: 0 0 15px rgba(71,118,230,0.5); }
+ .stat-card.c-green .stat-value { color: #38ef7d; text-shadow: 0 0 15px rgba(56,239,125,0.5); }
+ .stat-card.c-pink .stat-value { color: #f953c6; text-shadow: 0 0 15px rgba(249,83,198,0.5); }
+ .stat-card.c-purple .stat-value { color: #a855f7; text-shadow: 0 0 15px rgba(168,85,247,0.5); }
+ .stat-card.c-red .stat-value { color: #ff416c; text-shadow: 0 0 15px rgba(255,65,108,0.5); }
+ .stat-card.c-teal .stat-value { color: #11998e; text-shadow: 0 0 15px rgba(17,153,142,0.5); }
+ .badge { display: inline-block; padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-top: 6px; }
+ .badge-on { background: rgba(56,239,125,0.15); color: #38ef7d; border: 1px solid rgba(56,239,125,0.3); }
+ .badge-off { background: rgba(100,100,100,0.15); color: #666; border: 1px solid rgba(100,100,100,0.2); }
+ .badge-wires-on { background: rgba(255,107,107,0.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); }
+ .badge-wires-off { background: rgba(56,239,125,0.15); color: #38ef7d; border: 1px solid rgba(56,239,125,0.3); }
+ .badge-ok { background: rgba(56,239,125,0.15); color: #38ef7d; border: 1px solid rgba(56,239,125,0.3); }
+ .badge-err { background: rgba(255,65,108,0.15); color: #ff416c; border: 1px solid rgba(255,65,108,0.3); }
+ .chart-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; padding: 15px; margin-bottom: 20px; width: 100%; }
+ .chart-title { font-size: 14px; color: #555; letter-spacing: 2px; margin-bottom: 10px; text-align: right; }
+ .chart-wrapper { position: relative; width: 100%; height: 300px; }
+ .btn-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 25px; flex-wrap: wrap; }
+ .btn { padding: 11px 24px; border: none; border-radius: 25px; font-size: 13px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+ .btn-primary { background: linear-gradient(90deg, #f953c6, #b91d73); color: white; box-shadow: 0 4px 20px rgba(249,83,198,0.3); }
+ .btn-secondary{ background: linear-gradient(90deg, #4776e6, #8e54e9); color: white; box-shadow: 0 4px 20px rgba(71,118,230,0.3); }
+ .btn-danger { background: linear-gradient(90deg, #ff416c, #ff4b2b); color: white; box-shadow: 0 4px 20px rgba(255,65,108,0.3); }
+ .btn-warning { background: linear-gradient(90deg, #f7971e, #ffd200); color: #222; box-shadow: 0 4px 20px rgba(247,151,30,0.3); }
+ .btn-green { background: linear-gradient(90deg, #11998e, #38ef7d); color: #111; box-shadow: 0 4px 20px rgba(56,239,125,0.3); }
+ .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+ .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; backdrop-filter: blur(8px); }
+ .overlay.active { display: block; }
+ .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(135deg, #0d0d1a, #121228); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 28px; width: 90%; max-width: 900px; max-height: 80vh; overflow-y: auto; z-index: 101; }
+ .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+ .modal-header h2 { font-size: 16px; background: linear-gradient(90deg, #f953c6, #b91d73); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 2px; }
+ .btn-close { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; }
+ .btn-close:hover { background: rgba(255,65,108,0.2); }
+ table { width: 100%; border-collapse: collapse; font-size: 12px; }
+ th { background: rgba(249,83,198,0.1); color: #f953c6; padding: 10px 8px; text-align: center; position: sticky; top: 0; border-bottom: 1px solid rgba(249,83,198,0.2); }
+ td { padding: 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04); color: #aaa; }
+ tr:hover td { background: rgba(255,255,255,0.03); color: #eee; }
+ .marahel-table th { background: rgba(249,83,198,0.1); color: #f953c6; padding: 12px; text-align: center; }
+ .marahel-table td { padding: 14px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); color: #ccc; font-size: 15px; }
+ .device-box { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+ .device-box h3 { font-size: 14px; color: #f953c6; margin-bottom: 8px; }
+ .key-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+ .key-row code { flex: 1; min-width: 200px; background: #0f0f16; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; font-size: 12px; color: #38ef7d; overflow-x: auto; white-space: nowrap; }
+ .modal input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; color: #fff; font-size: 15px; width: 100%; margin: 8px 0; }
+ .modal input:focus { outline: none; border-color: #f953c6; }
+ .modal label { color: #888; font-size: 12px; }
+ .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+
+ <div class="topbar">
+   <div class="brand">🔥 منصة الأفران</div>
+   <div class="right">
+     <span class="email" id="userEmail"></span>
+     <button class="mini-btn" onclick="logout()">خروج</button>
+   </div>
+ </div>
+
+ <!-- ═══ شاشة قائمة الأفران ═══ -->
+ <div id="listView">
+   <h1>أفراني</h1>
+   <p class="subtitle">اختر فرناً لعرض لوحة التحكم</p>
+   <div class="kiln-grid" id="kilnGrid"></div>
+ </div>
+
+ <!-- ═══ شاشة لوحة التحكم ═══ -->
+ <div id="dashView" class="hidden">
+   <span class="back" onclick="showList()">→ رجوع للأفران</span>
+   <h1 id="dashKilnName">🌡️ لوحة التحكم</h1>
+   <p class="subtitle">مراقبة الفرن بشكل مباشر <span class="live-dot"></span></p>
+   <p class="last-update" id="lastUpdate">آخر تحديث: --</p>
+
+   <div class="top-row">
+     <div class="program-card">
+       <div class="stat-label">✨ حالة البرنامج</div>
+       <span class="program-badge ps-0" id="sH">--</span>
+     </div>
+     <div class="remaining-card">
+       <div class="remaining-label">⏳ الوقت المتبقي لتشغيل برنامج الحرق</div>
+       <div class="remaining-time">
+         <span class="remaining-num" id="sht">--</span><span class="remaining-unit">ساعة</span>
+         <span class="remaining-sep">:</span>
+         <span class="remaining-num" id="smt">--</span><span class="remaining-unit">دقيقة</span>
+       </div>
+     </div>
+   </div>
+
+   <div class="temp-hero">
+     <div class="hero-card fire">
+       <div class="hero-label">🔥 حرارة الفرن الحقيقية</div>
+       <div class="hero-value" id="sc1">--</div>
+       <div class="hero-unit">درجة مئوية °C</div>
+     </div>
+     <div class="hero-card virtual">
+       <div class="hero-label">〰️ حرارة الفرن الافتراضية</div>
+       <div class="hero-value" id="si1">--</div>
+       <div class="hero-unit">درجة مئوية °C</div>
+     </div>
+   </div>
+
+   <div class="stats-grid">
+     <div class="stat-card c-orange"><div class="stat-label">الدرجة النهائية</div><div class="stat-value" id="sx">--</div><div class="stat-unit">°C</div></div>
+     <div class="stat-card c-green"><div class="stat-label">الساعات الجارية</div><div class="stat-value" id="sh">--</div><div class="stat-unit">ساعة</div></div>
+     <div class="stat-card c-blue"><div class="stat-label">وقت المرحلة الواحدة</div><div class="stat-value" id="st">--</div><div class="stat-unit">ساعة</div></div>
+     <div class="stat-card c-pink"><div class="stat-label">مدة التثبيت</div><div class="stat-value" id="sD">--</div><div class="stat-unit">دقيقة</div></div>
+     <div class="stat-card c-purple"><div class="stat-label">دقائق التثبيت الجارية</div><div class="stat-value" id="smD">--</div><div class="stat-unit">دقيقة</div></div>
+     <div class="stat-card c-teal clickable" onclick="openModal('marahel')"><div class="stat-label">المراحل</div><div class="stat-value" style="font-size:14px;margin-top:8px;"><span class="badge badge-off" id="sMARAHEL">--</span></div></div>
+     <div class="stat-card c-blue"><div class="stat-label">النزول التدريجي</div><div class="stat-value" style="font-size:14px;margin-top:8px;"><span class="badge badge-off" id="sDOWN">--</span></div></div>
+     <div class="stat-card c-red"><div class="stat-label">حالة الأسلاك</div><div class="stat-value" style="font-size:14px;margin-top:8px;"><span class="badge badge-wires-off" id="swires">--</span></div></div>
+     <div class="stat-card c-green" id="electricCard"><div class="stat-label">حالة الحساس</div><div class="stat-value" style="font-size:14px;margin-top:8px;"><span class="badge badge-ok" id="sElectric">--</span></div></div>
+   </div>
+
+   <div class="chart-card">
+     <div class="chart-title">📈 مخطط درجات الحرارة</div>
+     <div class="chart-wrapper"><canvas id="tempChart" style="width:100%!important;height:100%!important;display:block;"></canvas></div>
+   </div>
+
+   <div class="btn-group">
+     <button class="btn btn-secondary" onclick="openModal('log')">📋 السجل</button>
+     <button class="btn btn-green" onclick="showEvents()">🗂️ سجل الأحداث</button>
+     <button class="btn btn-warning" onclick="openNotify()">🔔 الإشعارات</button>
+     <button class="btn btn-primary" onclick="openModal('device')">🔌 مفتاح الجهاز</button>
+     <button class="btn btn-danger" onclick="stopDevice()">🛑 إيقاف إجباري</button>
+   </div>
+   <div class="btn-group" style="margin-top:-10px;">
+     <button class="mini-btn" onclick="deleteKiln()" style="color:#ff6b6b;border-color:rgba(255,65,108,0.3);">🗑 حذف الفرن</button>
+   </div>
+ </div>
+
+ <!-- نافذة المراحل -->
+ <div class="overlay" id="overlayMarahel"><div class="modal">
+   <div class="modal-header"><h2>📋 تفاصيل المراحل</h2><button class="btn-close" onclick="closeModal('marahel')">✕</button></div>
+   <table class="marahel-table">
+     <thead><tr><th>المرحلة</th><th>الحرارة °C</th><th>الوقت ساعة</th></tr></thead>
+     <tbody>
+       <tr><td>المرحلة الأولى</td><td id="mx1">--</td><td id="mt1">--</td></tr>
+       <tr><td>المرحلة الثانية</td><td id="mx2">--</td><td id="mt2">--</td></tr>
+       <tr><td>المرحلة الثالثة</td><td id="mx3">--</td><td id="mt3">--</td></tr>
+     </tbody>
+   </table>
+ </div></div>
+
+ <!-- نافذة السجل -->
+ <div class="overlay" id="overlayLog"><div class="modal">
+   <div class="modal-header"><h2>📋 سجل البيانات</h2><button class="btn-close" onclick="closeModal('log')">✕</button></div>
+   <table>
+     <thead><tr><th>الوقت</th><th>حقيقية</th><th>افتراضية</th><th>الأسلاك</th><th>الدرجة النهائية</th><th>الساعات</th><th>المراحل</th><th>النزول</th><th>الحساس</th><th>البرنامج</th></tr></thead>
+     <tbody id="logTable"></tbody>
+   </table>
+ </div></div>
+
+ <!-- نافذة مفتاح الجهاز -->
+ <div class="overlay" id="overlayDevice"><div class="modal">
+   <div class="modal-header"><h2>🔌 مفتاح الجهاز (للأردوينو)</h2><button class="btn-close" onclick="closeModal('device')">✕</button></div>
+   <div class="device-box">
+     <p style="color:#888;font-size:13px;margin-bottom:12px;">ضع هذا المفتاح في كود الأردوينو ليرسل القراءات لهذا الفرن.</p>
+     <div class="key-row">
+       <code id="deviceKey">••••••••••••</code>
+       <button class="mini-btn" onclick="toggleKey()" id="keyToggleBtn">إظهار</button>
+       <button class="mini-btn" onclick="rotateKey()">تجديد</button>
+     </div>
+   </div>
+ </div></div>
+
+ <!-- ═══ شاشة سجل الأحداث ═══ -->
+ <div id="eventsView" class="hidden">
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+     <span class="back" onclick="backFromEvents()">→ لوحة التحكم</span>
+     <button class="btn btn-green" onclick="downloadCsv()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل السجل (Excel)</button>
+   </div>
+   <h1>🗂️ سجل الأحداث</h1>
+   <p class="subtitle">أرشيف الأحداث المهمة لهذا الفرن</p>
+
+   <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);max-width:600px;margin:0 auto 24px;">
+     <div class="stat-card c-red"><div class="stat-label">إيقاف</div><div class="stat-value" id="evStop" style="font-size:24px;">0</div></div>
+     <div class="stat-card c-orange"><div class="stat-label">إشعارات</div><div class="stat-value" id="evNotify" style="font-size:24px;">0</div></div>
+     <div class="stat-card c-pink"><div class="stat-label">مراحل</div><div class="stat-value" id="evStage" style="font-size:24px;">0</div></div>
+     <div class="stat-card c-teal"><div class="stat-label">إجمالي</div><div class="stat-value" id="evTotal" style="font-size:24px;">0</div></div>
+   </div>
+
+   <div id="eventsTimeline" style="max-width:700px;margin:0 auto;"></div>
+   <p id="eventsEmpty" class="empty-hint hidden">لا توجد أحداث بعد.</p>
+ </div>
+
+ <!-- نافذة الإشعارات -->
+ <div class="overlay" id="overlayNotify"><div class="modal" style="max-width:460px;">
+   <div class="modal-header"><h2>🔔 إعداد الإشعارات</h2><button class="btn-close" onclick="closeModal('notify')">✕</button></div>
+
+   <p style="color:#bbb;font-size:13px;margin-bottom:10px;">📡 قناة الإشعارات</p>
+   <div style="display:flex;gap:10px;margin-bottom:15px;">
+     <button id="btnPushover" class="mini-btn" style="flex:1;padding:12px;" onclick="setChannel('pushover')">📲 Pushover</button>
+     <button id="btnTelegram" class="mini-btn" style="flex:1;padding:12px;" onclick="setChannel('telegram')">✈️ تلجرام</button>
+   </div>
+
+   <!-- حقول Pushover -->
+   <div id="pushoverFields">
+     <label>Pushover User Key</label>
+     <input type="text" id="poUser" placeholder="u...">
+     <label>Pushover API Token</label>
+     <input type="text" id="poToken" placeholder="a...">
+   </div>
+   <!-- حقول تلجرام -->
+   <div id="telegramFields" class="hidden">
+     <label>Telegram Bot Token</label>
+     <input type="text" id="tgToken" placeholder="123456:ABC...">
+     <label>Telegram Chat ID</label>
+     <input type="text" id="tgChat" placeholder="6395559567">
+   </div>
+
+   <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:16px 0;">
+
+   <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0;">
+     <span style="color:#aaa;font-size:13px;">🌡️ تفعيل الإشعار الدوري</span>
+     <input type="checkbox" id="notifyEnabled" checked style="width:20px;height:20px;">
+   </div>
+   <label>كل كم درجة؟</label>
+   <input type="number" id="notifyInterval" value="100" min="1">
+
+   <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;">
+     <span style="color:#aaa;font-size:13px;">🔔 إشعار تغيّر المرحلة</span>
+     <input type="checkbox" id="stageEnabled" checked style="width:20px;height:20px;">
+   </div>
+
+   <br>
+   <button class="btn btn-primary" style="width:100%" onclick="saveNotify()">💾 حفظ الإعدادات</button>
+   <br><br>
+   <button class="btn btn-green" style="width:100%" onclick="testNotify()">🔔 إرسال إشعار تجريبي</button>
+   <br><br>
+   <div style="background:rgba(255,65,108,0.08);border:1px solid rgba(255,65,108,0.2);border-radius:12px;padding:14px;">
+     <p style="color:#ff416c;font-size:12px;line-height:1.6;">⚠️ تحذير تلقائي: يصلك إشعار إذا تجاوزت الحرارة الحقيقية الدرجة النهائية بـ 5 درجات.</p>
+   </div>
+ </div></div>
+
+ <!-- نافذة تأكيد الإيقاف -->
+ <div class="overlay" id="overlayStop"><div class="modal" style="max-width:380px;text-align:center;">
+   <div style="font-size:48px;margin-bottom:15px;">⚠️</div>
+   <div style="font-size:18px;font-weight:bold;color:#ff6b6b;margin-bottom:10px;">تأكيد الإيقاف الإجباري</div>
+   <div style="font-size:13px;color:#888;margin-bottom:25px;line-height:1.7;">سيصل أمر الإيقاف للفرن في الدورة القادمة.<br>هل أنت متأكد؟</div>
+   <div style="display:flex;gap:12px;justify-content:center;">
+     <button class="btn btn-danger" onclick="confirmStop()">🛑 نعم، أوقف</button>
+     <button class="btn btn-secondary" onclick="closeModal('stop')">↩️ رجوع</button>
+   </div>
+ </div></div>
+
+ <!-- نافذة إضافة فرن -->
+ <div class="overlay" id="overlayAdd"><div class="modal" style="max-width:400px;">
+   <div class="modal-header"><h2>➕ إضافة فرن جديد</h2><button class="btn-close" onclick="closeModal('add')">✕</button></div>
+   <label>اسم الفرن</label>
+   <input type="text" id="newKilnName" placeholder="الفرن الرئيسي">
+   <label>الموقع (اختياري)</label>
+   <input type="text" id="newKilnLoc" placeholder="المشغل">
+   <br><br>
+   <button class="btn btn-primary" style="width:100%" onclick="addKiln()">إضافة</button>
+ </div></div>
+
+</div>
+
+<script>
+const token = localStorage.getItem('access_token');
+if (!token) window.location.href = '/';
+const authHeaders = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+
+const hStatus = {
+ 0: { text: 'متوقف - في انتظار الإعدادات', cls: 'ps-0' },
+ 1: { text: 'المؤقت', cls: 'ps-1' },
+ 2: { text: 'الحرق التصاعدي', cls: 'ps-2' },
+ 3: { text: 'التثبيت', cls: 'ps-3' },
+ 4: { text: 'النزول التدريجي', cls: 'ps-4' },
+ 5: { text: 'البرنامج انتهى', cls: 'ps-5' },
+};
+
+let currentKiln = null, pollTimer = null, chart = null, keyVisible = false;
+
+async function api(path, opts = {}) {
+ const r = await fetch(path, { ...opts, headers: { ...authHeaders, ...(opts.headers||{}) } });
+ if (r.status === 401) { logout(); throw new Error('انتهت الجلسة'); }
+ return r;
+}
+function logout() { localStorage.removeItem('access_token'); localStorage.removeItem('refresh_token'); window.location.href = '/'; }
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function fmt(v, dec=1){ return (v===null||v===undefined) ? '--' : Number(v).toFixed(dec); }
+
+async function loadUser() {
+ const r = await api('/auth/me');
+ if (r.ok) { const u = await r.json(); document.getElementById('userEmail').textContent = u.email; }
+}
+
+// ───── قائمة الأفران ─────
+async function loadKilns() {
+ const r = await api('/kilns');
+ const kilns = await r.json();
+ const grid = document.getElementById('kilnGrid');
+ grid.innerHTML = '';
+ for (const k of kilns) {
+   const card = document.createElement('div');
+   card.className = 'kiln-card';
+   card.onclick = () => showDash(k);
+   let tempHtml = '<div class="kt cold">-- <span>°C</span></div>';
+   try {
+     const lr = await api('/kilns/' + k.id + '/latest');
+     if (lr.ok) { const d = await lr.json(); if (d.c1 != null) tempHtml = `<div class="kt">${Number(d.c1).toFixed(0)} <span>°C</span></div>`; }
+   } catch(e) {}
+   card.innerHTML = `<div class="kn">${escapeHtml(k.name)}</div><div class="kl">${escapeHtml(k.location||'بدون موقع')}</div>${tempHtml}`;
+   grid.appendChild(card);
+ }
+ // بطاقة الإضافة
+ const add = document.createElement('div');
+ add.className = 'kiln-card add-card';
+ add.onclick = () => openModal('add');
+ add.innerHTML = '<div class="plus">+</div><div>إضافة فرن</div>';
+ grid.appendChild(add);
+ if (kilns.length === 0) {
+   const hint = document.createElement('p');
+   hint.className = 'empty-hint';
+   hint.textContent = 'لا توجد أفران بعد. اضغط "إضافة فرن" للبدء.';
+   grid.parentElement.appendChild(hint);
+ }
+}
+
+// ───── لوحة التحكم ─────
+function showDash(kiln) {
+ currentKiln = kiln; keyVisible = false;
+ document.getElementById('listView').classList.add('hidden');
+ document.getElementById('dashView').classList.remove('hidden');
+ document.getElementById('dashKilnName').textContent = '🌡️ ' + kiln.name;
+ initChart();
+ refreshData();
+ if (pollTimer) clearInterval(pollTimer);
+ pollTimer = setInterval(refreshData, 3000);
+}
+function showList() {
+ if (pollTimer) clearInterval(pollTimer);
+ document.getElementById('dashView').classList.add('hidden');
+ document.getElementById('eventsView').classList.add('hidden');
+ document.getElementById('listView').classList.remove('hidden');
+ loadKilns();
+}
+
+function initChart() {
+ const ctx = document.getElementById('tempChart').getContext('2d');
+ if (chart) chart.destroy();
+ chart = new Chart(ctx, {
+   type: 'line',
+   data: { labels: [], datasets: [
+     { label: 'حرارة الفرن الحقيقية', data: [], borderColor: '#ff4500', backgroundColor: 'rgba(255,69,0,0.12)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 },
+     { label: 'حرارة الفرن الافتراضية', data: [], borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,0.08)', tension: 0.4, fill: true, pointRadius: 2, borderWidth: 2 }
+   ]},
+   options: { responsive: true, maintainAspectRatio: false, animation: false,
+     scales: { y: { ticks: { color: '#444', font: { size: 14 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+       x: { ticks: { color: '#444', maxTicksLimit: 8, font: { size: 14 } }, grid: { color: 'rgba(255,255,255,0.03)' } } },
+     plugins: { legend: { labels: { color: '#555', font: { size: 14 } } } } }
+ });
+}
+
+async function refreshData() {
+ if (!currentKiln) return;
+ try {
+   const r = await api('/kilns/' + currentKiln.id + '/readings?limit=200');
+   if (!r.ok) return;
+   const logs = await r.json();
+   if (!logs.length) { document.getElementById('lastUpdate').textContent = 'لا قراءات بعد'; return; }
+   const last = logs[logs.length - 1];
+
+   document.getElementById('sc1').textContent = fmt(last.c1, 1);
+   document.getElementById('si1').textContent = fmt(last.i1, 1);
+   document.getElementById('sx').textContent  = fmt(last.x, 0);
+   document.getElementById('sh').textContent  = fmt(last.h, 1);
+   document.getElementById('st').textContent  = fmt(last.t, 1);
+   document.getElementById('sD').textContent  = fmt(last.D, 0);
+   document.getElementById('smD').textContent = fmt(last.mD, 0);
+   document.getElementById('sht').textContent = last.ht ?? '--';
+   document.getElementById('smt').textContent = last.mt ?? '--';
+   document.getElementById('mx1').textContent = fmt(last.x1,0); document.getElementById('mt1').textContent = fmt(last.t1,1);
+   document.getElementById('mx2').textContent = fmt(last.x2,0); document.getElementById('mt2').textContent = fmt(last.t2,1);
+   document.getElementById('mx3').textContent = fmt(last.x3,0); document.getElementById('mt3').textContent = fmt(last.t3,1);
+
+   const marahelEl = document.getElementById('sMARAHEL');
+   marahelEl.textContent = parseInt(last.MARAHEL) === 1 ? 'مفعّل' : 'غير مفعّل';
+   marahelEl.className = 'badge ' + (parseInt(last.MARAHEL) === 1 ? 'badge-on' : 'badge-off');
+   const downEl = document.getElementById('sDOWN');
+   downEl.textContent = parseInt(last.DOWN) === 1 ? 'مفعّل' : 'غير مفعّل';
+   downEl.className = 'badge ' + (parseInt(last.DOWN) === 1 ? 'badge-on' : 'badge-off');
+   const wiresEl = document.getElementById('swires');
+   wiresEl.textContent = last.wiresActive || '--';
+   wiresEl.className = 'badge ' + (last.wiresActive === 'تضخ' ? 'badge-wires-on' : 'badge-wires-off');
+
+   const electricEl = document.getElementById('sElectric'), electricCard = document.getElementById('electricCard');
+   if (parseInt(last.ElectricOff) === 1) { electricEl.textContent = 'هناك خلل في الحساس'; electricEl.className = 'badge badge-err'; electricCard.classList.add('danger-card'); }
+   else { electricEl.textContent = 'يعمل بشكل طبيعي'; electricEl.className = 'badge badge-ok'; electricCard.classList.remove('danger-card'); }
+
+   const hInfo = hStatus[parseInt(last.H)] || { text: '--', cls: 'ps-0' };
+   const hEl = document.getElementById('sH'); hEl.textContent = hInfo.text; hEl.className = 'program-badge ' + hInfo.cls;
+   document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + (last.recorded_at || '').slice(11, 19);
+
+   const recent = logs.slice(-50);
+   chart.data.labels = recent.map(d => (d.recorded_at||'').slice(11, 19));
+   chart.data.datasets[0].data = recent.map(d => d.c1);
+   chart.data.datasets[1].data = recent.map(d => d.i1);
+   chart.update();
+
+   const tbody = document.getElementById('logTable'); tbody.innerHTML = '';
+   [...logs].reverse().forEach(d => {
+     const ht = hStatus[parseInt(d.H)] ? hStatus[parseInt(d.H)].text : '--';
+     tbody.innerHTML += `<tr><td>${(d.recorded_at||'').slice(11,19)}</td><td>${fmt(d.c1,1)}</td><td>${fmt(d.i1,1)}</td>
+       <td>${d.wiresActive||'--'}</td><td>${fmt(d.x,0)}</td><td>${fmt(d.h,1)}</td>
+       <td>${parseInt(d.MARAHEL)===1?'مفعّل':'غير'}</td><td>${parseInt(d.DOWN)===1?'مفعّل':'غير'}</td>
+       <td>${parseInt(d.ElectricOff)===1?'⚠️ خلل':'يعمل'}</td><td>${ht}</td></tr>`;
+   });
+ } catch(e) { console.error(e); }
+}
+
+// ───── المفتاح ─────
+function toggleKey() {
+ const stored = localStorage.getItem('dk_' + currentKiln.id);
+ if (keyVisible) { document.getElementById('deviceKey').textContent = '••••••••••••'; document.getElementById('keyToggleBtn').textContent = 'إظهار'; keyVisible = false; }
+ else { document.getElementById('deviceKey').textContent = stored || '— اضغط "تجديد" للحصول على مفتاح —'; document.getElementById('keyToggleBtn').textContent = 'إخفاء'; keyVisible = true; }
+}
+async function rotateKey() {
+ if (!confirm('سيتوقف المفتاح القديم فوراً. متابعة؟')) return;
+ const r = await api('/kilns/' + currentKiln.id + '/rotate-key', { method: 'POST' });
+ if (r.ok) { const d = await r.json(); localStorage.setItem('dk_' + currentKiln.id, d.device_key);
+   document.getElementById('deviceKey').textContent = d.device_key; document.getElementById('keyToggleBtn').textContent = 'إخفاء'; keyVisible = true;
+   alert('تم توليد مفتاح جديد. انسخه الآن وضعه في الأردوينو.'); }
+}
+async function deleteKiln() {
+ if (!confirm('حذف هذا الفرن وكل قراءاته نهائياً؟')) return;
+ const r = await api('/kilns/' + currentKiln.id, { method: 'DELETE' });
+ if (r.status === 204) showList();
+}
+
+// ───── إضافة فرن ─────
+async function addKiln() {
+ const name = document.getElementById('newKilnName').value.trim();
+ const location = document.getElementById('newKilnLoc').value.trim();
+ if (!name) { alert('أدخل اسم الفرن'); return; }
+ const r = await api('/kilns', { method: 'POST', body: JSON.stringify({ name, location: location || null }) });
+ if (r.status === 201) { const d = await r.json(); localStorage.setItem('dk_' + d.id, d.device_key);
+   closeModal('add'); document.getElementById('newKilnName').value=''; document.getElementById('newKilnLoc').value='';
+   alert('تم إنشاء الفرن!\n\nمفتاح الجهاز (انسخه للأردوينو):\n' + d.device_key); loadKilns(); }
+ else { alert('تعذّر إنشاء الفرن'); }
+}
+
+// ───── النوافذ ─────
+function openModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop'};
+ if(t==='device'){ document.getElementById('deviceKey').textContent='••••••••••••'; document.getElementById('keyToggleBtn').textContent='إظهار'; keyVisible=false; }
+ document.getElementById(m[t]).classList.add('active'); }
+function closeModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop'}; document.getElementById(m[t]).classList.remove('active'); }
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); }));
+
+// ───── الإشعارات ─────
+let notifyChannel = 'pushover';
+function setChannel(ch) {
+ notifyChannel = ch;
+ document.getElementById('btnPushover').style.color = ch==='pushover' ? '#f953c6' : '#aaa';
+ document.getElementById('btnPushover').style.borderColor = ch==='pushover' ? '#f953c6' : 'rgba(255,255,255,0.12)';
+ document.getElementById('btnTelegram').style.color = ch==='telegram' ? '#4aa8ff' : '#aaa';
+ document.getElementById('btnTelegram').style.borderColor = ch==='telegram' ? '#4aa8ff' : 'rgba(255,255,255,0.12)';
+ document.getElementById('pushoverFields').classList.toggle('hidden', ch!=='pushover');
+ document.getElementById('telegramFields').classList.toggle('hidden', ch!=='telegram');
+}
+async function openNotify() {
+ try {
+   const r = await api('/kilns/' + currentKiln.id + '/notify');
+   if (r.ok) {
+     const s = await r.json();
+     setChannel(s.notify_channel || 'pushover');
+     document.getElementById('notifyInterval').value = s.notify_interval;
+     document.getElementById('notifyEnabled').checked = s.notify_enabled;
+     document.getElementById('stageEnabled').checked = s.stage_notify;
+     // لا نعرض التوكنات (سرية)؛ نترك الحقول فارغة، وملؤها يحدّثها فقط
+     document.getElementById('poUser').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'u...';
+     document.getElementById('poToken').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'a...';
+     document.getElementById('tgToken').placeholder = s.telegram_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : '123456:ABC...';
+     document.getElementById('tgChat').placeholder = s.telegram_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : '6395559567';
+   }
+ } catch(e) {}
+ openModal('notify');
+}
+async function saveNotify() {
+ const payload = {
+   notify_channel: notifyChannel,
+   notify_enabled: document.getElementById('notifyEnabled').checked,
+   stage_notify: document.getElementById('stageEnabled').checked,
+   notify_interval: parseInt(document.getElementById('notifyInterval').value) || 100,
+ };
+ // التوكنات تُرسل فقط لو المستخدم كتب شيئاً
+ const poUser = document.getElementById('poUser').value.trim();
+ const poToken = document.getElementById('poToken').value.trim();
+ const tgToken = document.getElementById('tgToken').value.trim();
+ const tgChat = document.getElementById('tgChat').value.trim();
+ if (poUser) payload.pushover_user = poUser;
+ if (poToken) payload.pushover_token = poToken;
+ if (tgToken) payload.telegram_token = tgToken;
+ if (tgChat) payload.telegram_chat = tgChat;
+ const r = await api('/kilns/' + currentKiln.id + '/notify', { method: 'PUT', body: JSON.stringify(payload) });
+ if (r.ok) { alert('✅ تم حفظ الإعدادات!'); closeModal('notify'); }
+ else { alert('❌ فشل الحفظ'); }
+}
+async function testNotify() {
+ const r = await api('/kilns/' + currentKiln.id + '/notify/test', { method: 'POST' });
+ if (r.ok) alert('✅ تم إرسال الإشعار التجريبي!');
+ else { const d = await r.json(); alert('❌ ' + (d.detail || 'فشل الإرسال') + '\n(احفظ التوكنات أولاً)'); }
+}
+
+// ───── سجل الأحداث ─────
+async function showEvents() {
+ if (pollTimer) clearInterval(pollTimer);  // نوقف تحديث اللوحة مؤقتاً
+ document.getElementById('dashView').classList.add('hidden');
+ document.getElementById('eventsView').classList.remove('hidden');
+ await loadEvents();
+}
+function backFromEvents() {
+ document.getElementById('eventsView').classList.add('hidden');
+ document.getElementById('dashView').classList.remove('hidden');
+ refreshData();
+ if (pollTimer) clearInterval(pollTimer);
+ pollTimer = setInterval(refreshData, 3000);
+}
+
+async function loadEvents() {
+ const r = await api('/kilns/' + currentKiln.id + '/events');
+ const events = await r.json();
+ // العدّادات
+ document.getElementById('evTotal').textContent = events.length;
+ document.getElementById('evStop').textContent = events.filter(e => e.type === 'stop').length;
+ document.getElementById('evNotify').textContent = events.filter(e => e.type === 'notification').length;
+ document.getElementById('evStage').textContent = events.filter(e => e.type === 'stage').length;
+
+ const tl = document.getElementById('eventsTimeline');
+ const empty = document.getElementById('eventsEmpty');
+ tl.innerHTML = '';
+ if (events.length === 0) { empty.classList.remove('hidden'); return; }
+ empty.classList.add('hidden');
+
+ // تجميع حسب اليوم
+ const days = {};
+ const dayNames = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+ events.forEach(ev => {
+   const dateStr = (ev.created_at || '').slice(0, 10);
+   if (!days[dateStr]) days[dateStr] = [];
+   days[dateStr].push(ev);
+ });
+
+ for (const [date, dayEvents] of Object.entries(days)) {
+   const d = new Date(date);
+   const dayLabel = dayNames[d.getDay()] || '';
+   const header = document.createElement('div');
+   header.style.cssText = 'margin:20px 0 12px;color:#a855f7;font-weight:bold;font-size:14px;border-bottom:1px solid rgba(168,85,247,0.2);padding-bottom:6px;';
+   header.innerHTML = `🗓️ ${dayLabel} — ${date} <span style="color:#555;font-size:12px;">(${dayEvents.length} حدث)</span>`;
+   tl.appendChild(header);
+
+   dayEvents.forEach(ev => {
+     const card = document.createElement('div');
+     card.style.cssText = `display:flex;gap:12px;align-items:flex-start;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-right:3px solid ${ev.color};border-radius:12px;padding:14px;margin-bottom:10px;`;
+     card.innerHTML = `
+       <div style="font-size:22px;">${ev.icon}</div>
+       <div style="flex:1;">
+         <div style="font-weight:bold;color:${ev.color};font-size:14px;margin-bottom:4px;">${escapeHtml(ev.title)}</div>
+         <div style="color:#aaa;font-size:13px;line-height:1.6;">${escapeHtml(ev.message||'')}</div>
+       </div>
+       <div style="color:#555;font-size:12px;white-space:nowrap;">${(ev.created_at||'').slice(11,19)}</div>`;
+     tl.appendChild(card);
+   });
+ }
+}
+
+function downloadCsv() {
+ // التحميل يحتاج التوكن في الترويسة، فنجلبه كـ blob
+ fetch('/kilns/' + currentKiln.id + '/export.csv', { headers: { 'Authorization': 'Bearer ' + token } })
+   .then(r => r.blob())
+   .then(blob => {
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url; a.download = (currentKiln.name || 'kiln') + '_readings.csv';
+     document.body.appendChild(a); a.click(); a.remove();
+     URL.revokeObjectURL(url);
+   })
+   .catch(() => alert('تعذّر التحميل'));
+}
+
+// ───── الإيقاف الإجباري ─────
+function stopDevice() {
+ const c1 = parseFloat(document.getElementById('sc1').textContent);
+ const x = parseFloat(document.getElementById('sx').textContent);
+ // لو لم يصل للدرجة النهائية، نطلب تأكيداً
+ if (!isNaN(c1) && !isNaN(x) && c1 < x) { openModal('stop'); }
+ else { confirmStop(); }
+}
+async function confirmStop() {
+ closeModal('stop');
+ const r = await api('/kilns/' + currentKiln.id + '/stop', { method: 'POST' });
+ if (r.ok) alert('✅ تم إرسال أمر الإيقاف! سينفّذه الفرن في الدورة القادمة.');
+ else alert('❌ فشل إرسال الأمر');
+}
+
+loadUser();
+loadKilns();
+</script>
+</body>
+</html>

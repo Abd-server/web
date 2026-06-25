@@ -1,0 +1,125 @@
+"""
+═══════════════════════════════════════════════════════════════
+  الإشعارات (notifications.py) — القطعة 2+
+═══════════════════════════════════════════════════════════════
+
+يرسل إشعارات Pushover/Telegram باستخدام توكنات المستخدم نفسه
+(المخزّنة في الفرن). يُستدعى تلقائياً عند استقبال قراءة جديدة.
+
+ملاحظة: يستخدم urllib من المكتبة القياسية (لا حاجة لمكتبات إضافية).
+"""
+from __future__ import annotations
+
+import json
+import urllib.request
+import urllib.parse
+
+H_NAMES = {
+    0: "متوقف - في انتظار الإعدادات",
+    1: "المؤقت",
+    2: "الحرق التصاعدي",
+    3: "التثبيت",
+    4: "النزول التدريجي",
+    5: "البرنامج انتهى",
+}
+
+
+def _send_pushover(token: str, user: str, message: str, title: str = "Kiln Monitor") -> None:
+    try:
+        data = urllib.parse.urlencode({
+            "token": token, "user": user, "message": message, "title": title,
+        }).encode()
+        req = urllib.request.Request("https://api.pushover.net/1/messages.json", data=data)
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"❌ خطأ Pushover: {e}")
+
+
+def _send_telegram(token: str, chat_id: str, message: str) -> None:
+    try:
+        data = urllib.parse.urlencode({
+            "chat_id": chat_id, "text": message, "parse_mode": "HTML",
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage", data=data
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"❌ خطأ تلجرام: {e}")
+
+
+def send_notification(kiln, message: str, title: str = "Kiln Monitor") -> bool:
+    """يرسل عبر القناة المختارة لهذا الفرن. يرجّع True لو حاول الإرسال."""
+    if kiln.notify_channel == "telegram":
+        if kiln.telegram_token and kiln.telegram_chat:
+            _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{title}</b>\n{message}")
+            return True
+    else:
+        if kiln.pushover_token and kiln.pushover_user:
+            _send_pushover(kiln.pushover_token, kiln.pushover_user, message, title)
+            return True
+    return False
+
+
+def process_reading_notifications(kiln, reading, db) -> None:
+    """
+    يفحص القراءة الجديدة ويرسل الإشعارات المناسبة، محدّثاً حالة الفرن.
+    يُستدعى داخل مسار استقبال القراءة.
+    """
+    changed = False
+
+    # 1) إشعار تغيّر المرحلة
+    H = reading.H
+    if kiln.stage_notify and H is not None and H != kiln.last_stage and kiln.last_stage != -1:
+        stage_name = H_NAMES.get(H, "--")
+        send_notification(kiln, f"🔔 تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة")
+    if H is not None and H != kiln.last_stage:
+        if kiln.last_stage != -1:
+            # نسجّل الحدث في الأرشيف (حتى لو الإشعار معطّل)
+            log_event(db, kiln.id, "stage", f"المرحلة: {H_NAMES.get(H, '--')}",
+                      message=f"تحوّل البرنامج إلى مرحلة: {H_NAMES.get(H, '--')}",
+                      color="#ff7043", icon="🔥")
+        kiln.last_stage = H
+        changed = True
+
+    # 2) إشعار دوري كل notify_interval درجة
+    c1 = reading.c1
+    if kiln.notify_enabled and c1 is not None and kiln.notify_interval > 0:
+        if c1 >= kiln.last_notified_temp + kiln.notify_interval:
+            kiln.last_notified_temp = (int(c1) // kiln.notify_interval) * kiln.notify_interval
+            send_notification(kiln, f"🌡️ الحرارة وصلت إلى {int(c1)}°C")
+            log_event(db, kiln.id, "notification", f"🔔 الحرارة {int(c1)}°C",
+                      message=f"وصلت الحرارة إلى {int(c1)}°C", color="#ffb74d", icon="🔔")
+            changed = True
+
+    # 3) تحذير تجاوز الدرجة النهائية
+    x = reading.x
+    if c1 is not None and x is not None and H not in (None, 0) and c1 > x + 5:
+        send_notification(
+            kiln,
+            f"🚨 تحذير! الحرارة {int(c1)}°C تجاوزت الحد بـ {int(c1 - x)} درجة!",
+            title="⚠️ خطر",
+        )
+
+    if changed:
+        db.commit()
+
+
+# ─────────────────────────────────────────────
+#  تسجيل الأحداث المهمة (سجل الأحداث / الأرشيف)
+# ─────────────────────────────────────────────
+
+def log_event(db, kiln_id: str, event_type: str, title: str,
+              message: str = "", color: str = "#9e9e9e", icon: str = "•") -> None:
+    """يسجّل حدثاً في جدول events."""
+    from app.models.kiln import Event
+    try:
+        ev = Event(
+            kiln_id=kiln_id, type=event_type, title=title,
+            message=message, color=color, icon=icon,
+        )
+        db.add(ev)
+        db.commit()
+    except Exception as e:
+        print(f"❌ خطأ تسجيل الحدث: {e}")
+        db.rollback()
