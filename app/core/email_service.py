@@ -16,8 +16,11 @@
 """
 from __future__ import annotations
 
+import json
 import smtplib
 import ssl
+import urllib.request
+import urllib.error
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
@@ -25,12 +28,41 @@ from email.utils import formataddr
 from app.core.config import settings
 
 
-def send_email(to_email: str, subject: str, html_body: str) -> bool:
-    """يرسل إيميل HTML. يرجّع True لو نجح."""
-    if not settings.email_configured():
-        print("⚠️ الإيميل غير مُعدّ (SMTP_USER/SMTP_PASSWORD مفقودان)")
+def _send_via_resend(to_email: str, subject: str, html_body: str) -> bool:
+    """يرسل عبر Resend HTTP API. يرجّع True لو نجح."""
+    try:
+        payload = json.dumps({
+            "from": f"{settings.SMTP_FROM_NAME} <{settings.EMAIL_FROM}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body,
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            ok = 200 <= resp.status < 300
+            if ok:
+                print("✅ تم إرسال الإيميل عبر Resend")
+            return ok
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "ignore")
+        print(f"❌ فشل إرسال الإيميل عبر Resend: {e.code} {body}")
+        return False
+    except Exception as e:
+        print(f"❌ فشل إرسال الإيميل عبر Resend: {e}")
         return False
 
+
+def _send_via_smtp(to_email: str, subject: str, html_body: str) -> bool:
+    """بديل: يرسل عبر Gmail SMTP."""
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -43,10 +75,21 @@ def send_email(to_email: str, subject: str, html_body: str) -> bool:
             server.starttls(context=context)
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
+        print("✅ تم إرسال الإيميل عبر SMTP")
         return True
     except Exception as e:
-        print(f"❌ فشل إرسال الإيميل: {e}")
+        print(f"❌ فشل إرسال الإيميل عبر SMTP: {e}")
         return False
+
+
+def send_email(to_email: str, subject: str, html_body: str) -> bool:
+    """يرسل إيميل HTML. يفضّل Resend، وإلا Gmail SMTP."""
+    if settings.resend_configured():
+        return _send_via_resend(to_email, subject, html_body)
+    if settings.SMTP_USER and settings.SMTP_PASSWORD:
+        return _send_via_smtp(to_email, subject, html_body)
+    print("⚠️ الإيميل غير مُعدّ (لا Resend ولا SMTP)")
+    return False
 
 
 def send_reset_code(to_email: str, code: str, full_name: str = "") -> bool:

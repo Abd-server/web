@@ -32,8 +32,14 @@ class Settings:
     # قاعدة البيانات: SQLite الآن، ونغيّرها لـ PostgreSQL لاحقاً بتغيير هذا السطر فقط.
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "sqlite:///./demo.db")
 
-    # ─── إعدادات الإيميل (لاسترجاع كلمة المرور) ───
-    # عبر Gmail SMTP. أنشئ إيميل للمنصة وفعّل "كلمة مرور التطبيق".
+    # ─── إعدادات الإيميل ───
+    # الأفضل: Resend (إيميلات تصل للوارد). البديل: Gmail SMTP.
+    # Resend:
+    RESEND_API_KEY: str = os.environ.get("RESEND_API_KEY", "")
+    # المُرسِل: لازم يكون على دومينك المُتحقّق في Resend
+    EMAIL_FROM: str = os.environ.get("EMAIL_FROM", "no-reply@furanfakhar.com")
+
+    # Gmail SMTP (بديل احتياطي):
     SMTP_HOST: str = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = int(os.environ.get("SMTP_PORT", "587"))
     SMTP_USER: str = os.environ.get("SMTP_USER", "")       # إيميل المنصة
@@ -43,8 +49,12 @@ class Settings:
     SITE_URL: str = os.environ.get("SITE_URL", "https://furanfakhar.com")
 
     @classmethod
+    def resend_configured(cls) -> bool:
+        return bool(cls.RESEND_API_KEY)
+
+    @classmethod
     def email_configured(cls) -> bool:
-        return bool(cls.SMTP_USER and cls.SMTP_PASSWORD)
+        return bool(cls.RESEND_API_KEY or (cls.SMTP_USER and cls.SMTP_PASSWORD))
 
     @classmethod
     def is_production_ready(cls) -> bool:
