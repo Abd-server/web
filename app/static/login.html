@@ -93,6 +93,38 @@
 
     <button class="submit" id="submitBtn" onclick="submit()">دخول</button>
     <div class="msg" id="msg"></div>
+    <div id="forgotLink" style="text-align:center;margin-top:14px;">
+      <a href="#" onclick="showForgot();return false;"
+         style="color:#4aa8ff;font-size:14px;text-decoration:none;">نسيت كلمة المرور؟</a>
+    </div>
+  </div>
+
+  <!-- ═══ نموذج استرجاع كلمة المرور ═══ -->
+  <div class="card" id="forgotCard" style="display:none;">
+    <div class="sub" id="forgotSub">أدخل بريدك ليصلك رمز الاسترجاع</div>
+
+    <!-- الخطوة 1: إدخال الإيميل -->
+    <div id="forgotStep1">
+      <label>البريد الإلكتروني</label>
+      <input type="email" id="fEmail" placeholder="you@example.com">
+      <button class="submit" id="fSendBtn" onclick="sendResetCode()">إرسال الرمز</button>
+    </div>
+
+    <!-- الخطوة 2: إدخال الرمز وكلمة المرور الجديدة -->
+    <div id="forgotStep2" style="display:none;">
+      <label>الرمز (وصلك على البريد)</label>
+      <input type="text" id="fCode" placeholder="______" maxlength="6"
+             inputmode="numeric" style="letter-spacing:8px;text-align:center;font-size:20px;">
+      <label>كلمة المرور الجديدة</label>
+      <input type="password" id="fNewPass" placeholder="8 أحرف على الأقل">
+      <button class="submit" id="fResetBtn" onclick="doReset()">تعيين كلمة المرور والدخول</button>
+    </div>
+
+    <div class="msg" id="fMsg"></div>
+    <div style="text-align:center;margin-top:14px;">
+      <a href="#" onclick="hideForgot();return false;"
+         style="color:#888;font-size:14px;text-decoration:none;">← رجوع لتسجيل الدخول</a>
+    </div>
   </div>
 
   <script>
@@ -164,8 +196,89 @@
       }
     }
 
-    // دخول بالضغط على Enter
-    document.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+    // ═══ استرجاع كلمة المرور ═══
+    function showForgot() {
+      document.querySelector('.card').style.display = 'none';
+      document.getElementById('forgotCard').style.display = 'block';
+      // املأ الإيميل تلقائياً لو كتبه
+      const e = document.getElementById('email').value.trim();
+      if (e) document.getElementById('fEmail').value = e;
+    }
+    function hideForgot() {
+      document.getElementById('forgotCard').style.display = 'none';
+      document.querySelector('.card').style.display = 'block';
+      // إعادة الضبط
+      document.getElementById('forgotStep1').style.display = 'block';
+      document.getElementById('forgotStep2').style.display = 'none';
+      document.getElementById('fMsg').className = 'msg';
+      document.getElementById('forgotSub').textContent = 'أدخل بريدك ليصلك رمز الاسترجاع';
+    }
+    function showFMsg(text, type) {
+      const el = document.getElementById('fMsg');
+      el.textContent = text; el.className = 'msg ' + type;
+    }
+
+    async function sendResetCode() {
+      const email = document.getElementById('fEmail').value.trim();
+      if (!email) { showFMsg('أدخل بريدك الإلكتروني', 'err'); return; }
+      const btn = document.getElementById('fSendBtn');
+      btn.disabled = true;
+      try {
+        await fetch('/auth/forgot-password', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        // ننتقل للخطوة 2 دائماً (لا نكشف وجود الإيميل)
+        document.getElementById('forgotStep1').style.display = 'none';
+        document.getElementById('forgotStep2').style.display = 'block';
+        document.getElementById('forgotSub').textContent = 'أدخل الرمز الذي وصلك على البريد';
+        showFMsg('إذا كان البريد مسجّلاً، وصلك رمز من 6 أرقام. تحقّق من بريدك (وصندوق السبام).', 'ok');
+      } catch (e) {
+        showFMsg('خطأ في الاتصال بالخادم', 'err');
+      }
+      btn.disabled = false;
+    }
+
+    async function doReset() {
+      const email = document.getElementById('fEmail').value.trim();
+      const code = document.getElementById('fCode').value.trim();
+      const newPass = document.getElementById('fNewPass').value;
+      if (!code || code.length < 4) { showFMsg('أدخل الرمز كاملاً', 'err'); return; }
+      if (!newPass || newPass.length < 8) { showFMsg('كلمة المرور 8 أحرف على الأقل', 'err'); return; }
+      const btn = document.getElementById('fResetBtn');
+      btn.disabled = true;
+      try {
+        const r = await fetch('/auth/reset-password', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code, new_password: newPass })
+        });
+        if (r.ok) {
+          const d = await r.json();
+          localStorage.setItem('access_token', d.access_token);
+          localStorage.setItem('refresh_token', d.refresh_token);
+          showFMsg('تم تغيير كلمة المرور! جارٍ الدخول...', 'ok');
+          setTimeout(() => window.location.href = '/app', 800);
+        } else {
+          const d = await r.json();
+          showFMsg(d.detail || 'الرمز غير صحيح أو منتهي', 'err');
+          btn.disabled = false;
+        }
+      } catch (e) {
+        showFMsg('خطأ في الاتصال بالخادم', 'err');
+        btn.disabled = false;
+      }
+    }
+
+    // دخول بالضغط على Enter (حسب البطاقة الظاهرة)
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      if (document.getElementById('forgotCard').style.display === 'block') {
+        if (document.getElementById('forgotStep2').style.display === 'block') doReset();
+        else sendResetCode();
+      } else {
+        submit();
+      }
+    });
 
     // لو مسجّل دخول مسبقاً، حوّله للتطبيق
     if (localStorage.getItem('access_token')) {

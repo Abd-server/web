@@ -45,3 +45,24 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True  # يسمح بالتحويل من نموذج SQLAlchemy
+
+
+# ───── استرجاع وتغيير كلمة المرور ─────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+    new_password: str = Field(min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class ChangeNameRequest(BaseModel):
+    full_name: str = Field(min_length=1, max_length=80)

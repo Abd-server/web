@@ -32,6 +32,20 @@ class Settings:
     # قاعدة البيانات: SQLite الآن، ونغيّرها لـ PostgreSQL لاحقاً بتغيير هذا السطر فقط.
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "sqlite:///./demo.db")
 
+    # ─── إعدادات الإيميل (لاسترجاع كلمة المرور) ───
+    # عبر Gmail SMTP. أنشئ إيميل للمنصة وفعّل "كلمة مرور التطبيق".
+    SMTP_HOST: str = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.environ.get("SMTP_PORT", "587"))
+    SMTP_USER: str = os.environ.get("SMTP_USER", "")       # إيميل المنصة
+    SMTP_PASSWORD: str = os.environ.get("SMTP_PASSWORD", "")  # كلمة مرور التطبيق
+    SMTP_FROM_NAME: str = os.environ.get("SMTP_FROM_NAME", "منصة الأفران")
+    # رابط الموقع (لروابط الاسترجاع في الإيميل)
+    SITE_URL: str = os.environ.get("SITE_URL", "https://furanfakhar.com")
+
+    @classmethod
+    def email_configured(cls) -> bool:
+        return bool(cls.SMTP_USER and cls.SMTP_PASSWORD)
+
     @classmethod
     def is_production_ready(cls) -> bool:
         """تحذير إن كان السرّ ما زال القيمة المؤقتة."""

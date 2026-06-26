@@ -31,3 +31,7 @@ class User(Base):
     created_at = Column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
+
+    # ─── استرجاع كلمة المرور ───
+    reset_code = Column(String, nullable=True)        # رمز من 6 أرقام
+    reset_expires = Column(DateTime, nullable=True)   # ينتهي بعد 15 دقيقة

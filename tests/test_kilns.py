@@ -153,12 +153,13 @@ def test_stop_flag_flow():
     assert r.status_code == 200 and r.json()["stop_requested"] is False
     # المستخدم يطلب الإيقاف
     assert client.post(f"/kilns/{k['id']}/stop", headers=h).status_code == 200
-    # الأردوينو يسأل: يجد الأمر
-    r = client.get("/device/stop-status", headers=dk)
-    assert r.json()["stop_requested"] is True
-    # وبعدها يُنزَّل العلم تلقائياً (مرة واحدة فقط)
-    r = client.get("/device/stop-status", headers=dk)
-    assert r.json()["stop_requested"] is False
+    # الأردوينو يسأل: يجد الأمر — ويبقى مرفوعاً مهما تكرر السؤال
+    assert client.get("/device/stop-status", headers=dk).json()["stop_requested"] is True
+    assert client.get("/device/stop-status", headers=dk).json()["stop_requested"] is True
+    # لا ينزل إلا بعد أن يؤكّد الأردوينو التنفيذ
+    assert client.post("/device/stop-confirm", headers=dk).status_code == 200
+    assert client.get("/device/stop-status", headers=dk).json()["stop_requested"] is False
+
 
 
 def test_stop_requires_ownership():

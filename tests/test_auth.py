@@ -90,3 +90,68 @@ def test_refresh_issues_new_access():
     r = client.post("/auth/refresh", json={"refresh_token": tok["refresh_token"]})
     assert r.status_code == 200
     assert "access_token" in r.json()
+
+
+# ───── اختبارات استرجاع/تغيير كلمة المرور (المرحلة أ) ─────
+
+def _login(email="a@b.com", pw="password123"):
+    return client.post("/auth/login", json={"email": email, "password": pw})
+
+
+def test_forgot_password_no_leak():
+    """forgot-password يرجّع نفس الرد سواء الإيميل موجود أو لا."""
+    _register()
+    r1 = client.post("/auth/forgot-password", json={"email": "a@b.com"})
+    r2 = client.post("/auth/forgot-password", json={"email": "ghost@x.com"})
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json() == r2.json()  # لا يكشف وجود الإيميل
+
+
+def test_reset_password_flow():
+    """المسار الكامل: طلب رمز → قراءته من القاعدة → إعادة التعيين → دخول بالجديدة."""
+    _register()
+    client.post("/auth/forgot-password", json={"email": "a@b.com"})
+    # نقرأ الرمز مباشرة من القاعدة (في الواقع يصل بالإيميل)
+    from app.db.database import SessionLocal
+    from app.models.user import User
+    db = SessionLocal()
+    user = db.query(User).filter(User.email == "a@b.com").first()
+    code = user.reset_code
+    db.close()
+    assert code and len(code) == 6
+    # إعادة التعيين
+    r = client.post("/auth/reset-password", json={
+        "email": "a@b.com", "code": code, "new_password": "newpass456"})
+    assert r.status_code == 200 and "access_token" in r.json()
+    # القديمة ما تشتغل، الجديدة تشتغل
+    assert _login(pw="password123").status_code == 401
+    assert _login(pw="newpass456").status_code == 200
+
+
+def test_reset_wrong_code():
+    _register()
+    client.post("/auth/forgot-password", json={"email": "a@b.com"})
+    r = client.post("/auth/reset-password", json={
+        "email": "a@b.com", "code": "000000", "new_password": "newpass456"})
+    assert r.status_code == 400
+
+
+def test_change_password():
+    _register()
+    tok = _login().json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    # كلمة حالية خاطئة
+    assert client.post("/auth/change-password", headers=h, json={
+        "current_password": "wrong", "new_password": "newpass456"}).status_code == 400
+    # صحيحة
+    assert client.post("/auth/change-password", headers=h, json={
+        "current_password": "password123", "new_password": "newpass456"}).status_code == 200
+    assert _login(pw="newpass456").status_code == 200
+
+
+def test_change_name():
+    _register()
+    tok = _login().json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    r = client.post("/auth/change-name", headers=h, json={"full_name": "اسم جديد"})
+    assert r.status_code == 200 and r.json()["full_name"] == "اسم جديد"

@@ -141,6 +141,9 @@
  .modal input:focus { outline: none; border-color: #f953c6; }
  .modal label { color: #888; font-size: 12px; }
  .hidden { display: none !important; }
+ .msg { display:none; padding:10px 14px; border-radius:10px; font-size:13px; margin-top:6px; }
+ .msg.err { display:block; background:rgba(255,65,108,0.12); color:#ff8fa3; }
+ .msg.ok { display:block; background:rgba(60,200,120,0.12); color:#6ee7a0; }
 </style>
 </head>
 <body>
@@ -150,6 +153,7 @@
    <div class="brand">🔥 منصة الأفران</div>
    <div class="right">
      <span class="email" id="userEmail"></span>
+     <button class="mini-btn" onclick="openAccount()">⚙️ حسابي</button>
      <button class="mini-btn" onclick="logout()">خروج</button>
    </div>
  </div>
@@ -329,6 +333,32 @@
    </div>
  </div></div>
 
+ <!-- ═══ مودال إعدادات الحساب ═══ -->
+ <div class="overlay" id="overlayAccount"><div class="modal" style="max-width:440px;">
+   <div class="modal-header"><h2>⚙️ إعدادات الحساب</h2><button class="btn-close" onclick="closeModal('account')">✕</button></div>
+
+   <label style="color:#888;font-size:12px;">البريد الإلكتروني</label>
+   <div id="accEmail" style="color:#ddd;font-size:15px;margin-bottom:18px;">—</div>
+
+   <!-- تغيير الاسم -->
+   <h3 style="color:#4aa8ff;font-size:15px;margin:8px 0;">👤 تغيير الاسم</h3>
+   <label>الاسم المعروض</label>
+   <input type="text" id="accName" placeholder="اسمك">
+   <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="saveName()">💾 حفظ الاسم</button>
+
+   <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:20px 0;">
+
+   <!-- تغيير كلمة المرور -->
+   <h3 style="color:#4aa8ff;font-size:15px;margin:8px 0;">🔒 تغيير كلمة المرور</h3>
+   <label>كلمة المرور الحالية</label>
+   <input type="password" id="accCurPass" placeholder="••••••••">
+   <label>كلمة المرور الجديدة</label>
+   <input type="password" id="accNewPass" placeholder="8 أحرف على الأقل">
+   <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="savePassword()">🔑 تغيير كلمة المرور</button>
+
+   <div class="msg" id="accMsg" style="margin-top:14px;"></div>
+ </div></div>
+
  <!-- نافذة تأكيد الإيقاف -->
  <div class="overlay" id="overlayStop"><div class="modal" style="max-width:380px;text-align:center;">
    <div style="font-size:48px;margin-bottom:15px;">⚠️</div>
@@ -378,9 +408,52 @@ function logout() { localStorage.removeItem('access_token'); localStorage.remove
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function fmt(v, dec=1){ return (v===null||v===undefined) ? '--' : Number(v).toFixed(dec); }
 
+let currentUser = null;
 async function loadUser() {
  const r = await api('/auth/me');
- if (r.ok) { const u = await r.json(); document.getElementById('userEmail').textContent = u.email; }
+ if (r.ok) {
+   currentUser = await r.json();
+   document.getElementById('userEmail').textContent = currentUser.email;
+ }
+}
+
+// ───── إعدادات الحساب ─────
+function openAccount() {
+ if (currentUser) {
+   document.getElementById('accEmail').textContent = currentUser.email;
+   document.getElementById('accName').value = currentUser.full_name || '';
+ }
+ document.getElementById('accMsg').className = 'msg';
+ document.getElementById('accCurPass').value = '';
+ document.getElementById('accNewPass').value = '';
+ openModal('account');
+}
+function accMsg(text, type) {
+ const el = document.getElementById('accMsg');
+ el.textContent = text; el.className = 'msg ' + type;
+}
+async function saveName() {
+ const name = document.getElementById('accName').value.trim();
+ if (!name) { accMsg('أدخل الاسم', 'err'); return; }
+ const r = await api('/auth/change-name', { method:'POST', body: JSON.stringify({ full_name: name }) });
+ if (r.ok) { currentUser = await r.json(); accMsg('✅ تم حفظ الاسم', 'ok'); }
+ else { accMsg('تعذّر حفظ الاسم', 'err'); }
+}
+async function savePassword() {
+ const cur = document.getElementById('accCurPass').value;
+ const np = document.getElementById('accNewPass').value;
+ if (!cur || !np) { accMsg('أدخل كلمة المرور الحالية والجديدة', 'err'); return; }
+ if (np.length < 8) { accMsg('كلمة المرور الجديدة 8 أحرف على الأقل', 'err'); return; }
+ const r = await api('/auth/change-password', { method:'POST',
+   body: JSON.stringify({ current_password: cur, new_password: np }) });
+ if (r.ok) {
+   accMsg('✅ تم تغيير كلمة المرور', 'ok');
+   document.getElementById('accCurPass').value = '';
+   document.getElementById('accNewPass').value = '';
+ } else {
+   const d = await r.json().catch(()=>({}));
+   accMsg(d.detail || 'تعذّر تغيير كلمة المرور', 'err');
+ }
 }
 
 // ───── قائمة الأفران ─────
@@ -539,10 +612,10 @@ async function addKiln() {
 }
 
 // ───── النوافذ ─────
-function openModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop'};
+function openModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop',account:'overlayAccount'};
  if(t==='device'){ document.getElementById('deviceKey').textContent='••••••••••••'; document.getElementById('keyToggleBtn').textContent='إظهار'; keyVisible=false; }
  document.getElementById(m[t]).classList.add('active'); }
-function closeModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop'}; document.getElementById(m[t]).classList.remove('active'); }
+function closeModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop',account:'overlayAccount'}; document.getElementById(m[t]).classList.remove('active'); }
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); }));
 
 // ───── الإشعارات ─────
