@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>منصة الأفران</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
  * { margin: 0; padding: 0; box-sizing: border-box; }
  body { font-family: 'Arial', sans-serif; background: #080818; min-height: 100vh; color: #eee; padding: 15px; width: 100vw; overflow-x: hidden; }
@@ -312,6 +313,9 @@
        <p style="color:#bbb;font-size:13px;margin:0 0 10px;">اربط حسابك بتلجرام مرة واحدة لتصلك إشعارات كل أفرانك.</p>
        <button class="btn btn-primary" style="width:100%" onclick="getTelegramCode()">🔗 ربط تلجرام</button>
        <div id="tgCodeBox" class="hidden" style="margin-top:14px;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
+         <p style="color:#aaa;font-size:13px;margin:0 0 10px;text-align:center;">📱 امسح الكود بكاميرا جوالك للربط فوراً:</p>
+         <div id="tgQR" style="display:flex;justify-content:center;background:#fff;padding:12px;border-radius:10px;margin:0 auto 12px;width:fit-content;"></div>
+         <p style="color:#777;font-size:12px;margin:0 0 12px;text-align:center;">— أو يدوياً —</p>
          <p style="color:#aaa;font-size:13px;margin:0 0 8px;">1️⃣ افتح البوت: <a id="tgBotLink" href="#" target="_blank" style="color:#4aa8ff;">@KilnMonitor_bot</a></p>
          <p style="color:#aaa;font-size:13px;margin:0 0 8px;">2️⃣ أرسل له هذا الرمز:</p>
          <div style="display:flex;gap:8px;align-items:center;">
@@ -699,9 +703,16 @@ async function getTelegramCode() {
  const r = await api('/auth/telegram/link-code', { method: 'POST' });
  if (r.ok) {
    const d = await r.json();
+   // رابط عميق يفتح البوت ويُمرّر الرمز تلقائياً (الرمز بدون شرطة لتوافق تيليجرام)
+   const startParam = d.code.replace('-', '_');   // TG-123456 → TG_123456
+   const deepLink = 'https://t.me/' + d.bot_username + '?start=' + startParam;
    document.getElementById('tgCode').textContent = d.code;
-   document.getElementById('tgBotLink').href = 'https://t.me/' + d.bot_username;
+   document.getElementById('tgBotLink').href = deepLink;
    document.getElementById('tgBotLink').textContent = '@' + d.bot_username;
+   // ارسم رمز QR
+   const qrBox = document.getElementById('tgQR');
+   qrBox.innerHTML = '';
+   new QRCode(qrBox, { text: deepLink, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
    document.getElementById('tgCodeBox').classList.remove('hidden');
  } else {
    const d = await r.json(); alert('❌ ' + (d.detail || 'تعذّر إنشاء الرمز'));

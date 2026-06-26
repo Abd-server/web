@@ -85,13 +85,40 @@ def handle_update(update: dict, db) -> None:
     if not chat_id:
         return
 
-    # أمر البداية
+    # أمر البداية — قد يحمل رمز ربط من QR: "/start TG-123456"
     if text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        payload = parts[1].strip() if len(parts) > 1 else ""
+        # توحيد: تيليجرام لا يقبل الشرطة في معامل start، فنحوّل _ إلى -
+        payload = payload.replace("_", "-")
+        # لو فيه رمز ربط مرفق (من مسح QR) نربط مباشرة
+        if payload.upper().startswith("TG-"):
+            user = _match_link_code(payload, db)
+            if user is not None:
+                user.telegram_chat = chat_id
+                user.telegram_link_code = None
+                user.telegram_link_expires = None
+                db.commit()
+                send_message(
+                    chat_id,
+                    "✅ <b>تم الربط بنجاح!</b>\n\n"
+                    "ستصلك الآن إشعارات أفرانك هنا: تغيّر المرحلة، "
+                    "الوصول لدرجات الحرارة، والتحذيرات. 🔥🌡️",
+                )
+                return
+            # الرمز منتهٍ أو غير صحيح
+            send_message(
+                chat_id,
+                "❌ رمز الربط منتهٍ أو غير صحيح.\n"
+                "ارجع للموقع واطلب رمزاً جديداً ثم امسح الكود مرة أخرى.",
+            )
+            return
+        # /start عادي بدون رمز
         send_message(
             chat_id,
             "👋 أهلاً بك في <b>منصة فران فاخر</b>!\n\n"
             "لربط حسابك، افتح الموقع واضغط على <b>«ربط تيليجرام»</b>، "
-            "ثم أرسل لي الرمز الذي يظهر لك (يبدأ بـ <code>TG-</code>).",
+            "ثم امسح رمز QR أو أرسل لي الرمز الذي يظهر لك (يبدأ بـ <code>TG-</code>).",
         )
         return
 
