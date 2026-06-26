@@ -341,14 +341,14 @@
        <button class="btn btn-primary" style="width:100%" onclick="getNtfyTopic()">🔗 ربط ntfy</button>
        <div id="ntfyBox" class="hidden" style="margin-top:14px;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
          <p style="color:#aaa;font-size:13px;margin:0 0 8px;">1️⃣ نزّل تطبيق <b>ntfy</b> من المتجر (مجاني)</p>
-         <p style="color:#aaa;font-size:13px;margin:0 0 10px;text-align:center;">2️⃣ امسح الكود للاشتراك فوراً:</p>
-         <div id="ntfyQR" style="display:flex;justify-content:center;background:#fff;padding:12px;border-radius:10px;margin:0 auto 12px;width:fit-content;"></div>
-         <p style="color:#777;font-size:12px;margin:0 0 8px;text-align:center;">— أو افتح الرابط يدوياً —</p>
+         <p style="color:#aaa;font-size:13px;margin:0 0 10px;text-align:center;">2️⃣ صوّر الكود بكاميرا جوالك وانسخ الاسم، أو انسخه من الزر تحت:</p>
+         <div id="ntfyQR" style="display:flex;justify-content:center;background:#fff;padding:12px;border-radius:10px;margin:0 auto 14px;width:fit-content;"></div>
+         <p style="color:#aaa;font-size:13px;margin:0 0 6px;">3️⃣ في تطبيق ntfy اضغط ➕ والصق هذا الاسم:</p>
          <div style="display:flex;gap:8px;align-items:center;">
-           <code id="ntfyUrl" style="flex:1;font-size:12px;text-align:center;background:#000;padding:10px;border-radius:8px;color:#4aff9e;word-break:break-all;"></code>
-           <button class="mini-btn" style="padding:10px;" onclick="copyNtfyUrl()">📋</button>
+           <code id="ntfyTopic" style="flex:1;font-size:14px;font-weight:bold;text-align:center;background:#000;padding:14px;border-radius:8px;color:#4aff9e;word-break:break-all;"></code>
+           <button id="ntfyCopyBtn" class="btn btn-primary" style="padding:14px 18px;white-space:nowrap;" onclick="copyNtfyTopic()">📋 نسخ</button>
          </div>
-         <button class="mini-btn" style="width:100%;margin-top:10px;padding:10px;" onclick="refreshNtfyStatus()">🔄 تحديث الحالة</button>
+         <button class="mini-btn" style="width:100%;margin-top:12px;padding:10px;" onclick="refreshNtfyStatus()">🔄 تحديث الحالة</button>
        </div>
      </div>
    </div>
@@ -772,20 +772,25 @@ async function getNtfyTopic() {
  const r = await api('/auth/ntfy/link', { method: 'POST' });
  if (r.ok) {
    const d = await r.json();
-   // رابط ntfy:// يفتح التطبيق ويشترك مباشرة عند المسح
-   const appLink = 'ntfy://ntfy.sh/' + d.topic;
-   document.getElementById('ntfyUrl').textContent = d.url;
+   // الـ QR يحمل اسم الموضوع كنص بسيط: الكاميرا العادية تعرضه وتتيح نسخه،
+   // وتطبيق ntfy يقرأه عند الإضافة. هذا أوضح من رابط ntfy:// للكاميرا العادية.
+   document.getElementById('ntfyTopic').textContent = d.topic;
    const qrBox = document.getElementById('ntfyQR');
    qrBox.innerHTML = '';
-   new QRCode(qrBox, { text: appLink, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+   new QRCode(qrBox, { text: d.topic, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
    document.getElementById('ntfyBox').classList.remove('hidden');
  } else {
    const d = await r.json(); alert('❌ ' + (d.detail || 'تعذّر إنشاء الموضوع'));
  }
 }
-function copyNtfyUrl() {
- const url = document.getElementById('ntfyUrl').textContent;
- navigator.clipboard.writeText(url).then(()=>alert('✅ نُسخ الرابط'));
+function copyNtfyTopic() {
+ const topic = document.getElementById('ntfyTopic').textContent;
+ navigator.clipboard.writeText(topic).then(()=>{
+   const btn = document.getElementById('ntfyCopyBtn');
+   const old = btn.textContent;
+   btn.textContent = '✅ تم النسخ';
+   setTimeout(()=>{ btn.textContent = old; }, 1500);
+ });
 }
 async function unlinkNtfy() {
  if (!confirm('هل تريد إلغاء ربط ntfy؟')) return;
