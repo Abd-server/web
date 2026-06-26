@@ -25,6 +25,21 @@ H_NAMES = {
     5: "البرنامج انتهى",
 }
 
+# لون وأيقونة مميزة لكل مرحلة (تظهر في السجل والإشعارات)
+H_STYLE = {
+    0: ("#9e9e9e", "⏸️"),   # متوقف — رمادي
+    1: ("#42a5f5", "⏱️"),   # المؤقت — أزرق
+    2: ("#ff7043", "🔥"),   # الحرق التصاعدي — برتقالي
+    3: ("#ef5350", "🌡️"),   # التثبيت — أحمر
+    4: ("#26c6da", "❄️"),   # النزول التدريجي — سماوي
+    5: ("#66bb6a", "✅"),   # البرنامج انتهى — أخضر
+}
+
+
+def _stage_style(H):
+    """يرجّع (لون، أيقونة) للمرحلة، مع قيمة افتراضية آمنة."""
+    return H_STYLE.get(H, ("#ff7043", "🔥"))
+
 
 def _send_ntfy(topic: str, message: str, title: str = "Kiln Monitor") -> None:
     """
@@ -162,15 +177,16 @@ def process_reading_notifications(kiln, reading, db) -> None:
 
     # 1) إشعار تغيّر المرحلة
     H = reading.H
+    stage_color, stage_icon = _stage_style(H)
     if kiln.stage_notify and H is not None and H != kiln.last_stage and kiln.last_stage != -1:
         stage_name = H_NAMES.get(H, "--")
-        send_notification(kiln, f"🔔 تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة", db=db)
+        send_notification(kiln, f"{stage_icon} تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة", db=db)
     if H is not None and H != kiln.last_stage:
         if kiln.last_stage != -1:
-            # نسجّل الحدث في الأرشيف (حتى لو الإشعار معطّل)
-            log_event(db, kiln.id, "stage", f"المرحلة: {H_NAMES.get(H, '--')}",
+            # نسجّل الحدث في الأرشيف بلون وأيقونة المرحلة (حتى لو الإشعار معطّل)
+            log_event(db, kiln.id, "stage", f"{stage_icon} المرحلة: {H_NAMES.get(H, '--')}",
                       message=f"تحوّل البرنامج إلى مرحلة: {H_NAMES.get(H, '--')}",
-                      color="#ff7043", icon="🔥")
+                      color=stage_color, icon=stage_icon)
         kiln.last_stage = H
         changed = True
 

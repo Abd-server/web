@@ -191,7 +191,7 @@ def set_notify(kiln_id: str, body: NotifySettings, current_user: User = Depends(
 @router.post("/kilns/{kiln_id}/notify/test", status_code=200)
 def test_notify(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     kiln = _get_owned_kiln(kiln_id, current_user, db)
-    sent = send_notification(kiln, "🔔 هذا إشعار تجريبي من منصة الأفران 🌡️", title="تجريبي")
+    sent = send_notification(kiln, "🔔 هذا إشعار تجريبي من منصة الأفران 🌡️", title="تجريبي", db=db)
     if not sent:
         raise HTTPException(status_code=400, detail="لم تُضبط توكنات القناة المختارة")
     return {"status": "ok", "message": "تم إرسال الإشعار التجريبي"}
@@ -255,4 +255,41 @@ def export_readings_csv(kiln_id: str, current_user: User = Depends(get_current_u
         iter([out.getvalue()]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}_readings.csv"'},
+    )
+
+
+@router.get("/kilns/{kiln_id}/events.csv")
+def export_events_csv(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """تحميل سجل الأحداث (تحوّل المراحل، الإشعارات، الإيقاف) كملف CSV يفتح في Excel."""
+    import csv, io
+    from fastapi.responses import StreamingResponse
+    from app.models.kiln import Event
+
+    kiln = _get_owned_kiln(kiln_id, current_user, db)
+    rows = (
+        db.query(Event).filter(Event.kiln_id == kiln_id)
+        .order_by(Event.created_at.asc()).all()
+    )
+
+    type_ar = {"stage": "تحوّل مرحلة", "notification": "إشعار حرارة", "stop": "إيقاف إجباري"}
+
+    out = io.StringIO()
+    out.write("\ufeff")  # BOM عشان Excel يقرأ العربي
+    writer = csv.writer(out)
+    writer.writerow(["الوقت", "النوع", "العنوان", "التفاصيل"])
+    for ev in rows:
+        t = ev.created_at.strftime("%Y-%m-%d %H:%M:%S") if ev.created_at else ""
+        writer.writerow([
+            t,
+            type_ar.get(ev.type, ev.type),
+            ev.title or "",
+            ev.message or "",
+        ])
+
+    out.seek(0)
+    safe_name = (kiln.name or "kiln").replace(" ", "_")
+    return StreamingResponse(
+        iter([out.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_events.csv"'},
     )

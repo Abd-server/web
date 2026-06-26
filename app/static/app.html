@@ -269,7 +269,10 @@
  <div id="eventsView" class="hidden">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
      <span class="back" onclick="backFromEvents()">→ لوحة التحكم</span>
-     <button class="btn btn-green" onclick="downloadCsv()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل السجل (Excel)</button>
+     <div style="display:flex;gap:8px;">
+       <button class="btn btn-green" onclick="downloadEventsCsv()" style="padding:8px 16px;font-size:12px;">⬇️ سجل الأحداث</button>
+       <button class="btn btn-secondary" onclick="downloadCsv()" style="padding:8px 16px;font-size:12px;">⬇️ القراءات</button>
+     </div>
    </div>
    <h1>🗂️ سجل الأحداث</h1>
    <p class="subtitle">أرشيف الأحداث المهمة لهذا الفرن</p>
@@ -868,6 +871,18 @@ function downloadCsv() {
      const url = URL.createObjectURL(blob);
      const a = document.createElement('a');
      a.href = url; a.download = (currentKiln.name || 'kiln') + '_readings.csv';
+     document.body.appendChild(a); a.click(); a.remove();
+     URL.revokeObjectURL(url);
+   })
+   .catch(() => alert('تعذّر التحميل'));
+}
+function downloadEventsCsv() {
+ fetch('/kilns/' + currentKiln.id + '/events.csv', { headers: { 'Authorization': 'Bearer ' + token } })
+   .then(r => r.blob())
+   .then(blob => {
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url; a.download = (currentKiln.name || 'kiln') + '_events.csv';
      document.body.appendChild(a); a.click(); a.remove();
      URL.revokeObjectURL(url);
    })
