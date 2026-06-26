@@ -72,19 +72,26 @@ def _owner_telegram_chat(kiln, db=None) -> str | None:
 
 def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) -> bool:
     """يرسل عبر القناة المختارة لهذا الفرن. يرجّع True لو حاول الإرسال."""
+    # نضيف اسم الفرن للعنوان تلقائياً ليميّز العميل بين أفرانه المتعددة
+    kiln_name = (getattr(kiln, "name", None) or "").strip()
+    if kiln_name:
+        full_title = f"🔥 {kiln_name} — {title}"
+    else:
+        full_title = title
+
     if kiln.notify_channel == "telegram":
         # البوت المركزي (المرحلة ب): توكن واحد + chat صاحب الفرن
         chat = _owner_telegram_chat(kiln, db)
         if settings.telegram_configured() and chat:
-            _send_telegram(settings.TELEGRAM_BOT_TOKEN, chat, f"<b>{title}</b>\n{message}")
+            _send_telegram(settings.TELEGRAM_BOT_TOKEN, chat, f"<b>{full_title}</b>\n{message}")
             return True
         # توافق خلفي: لو الفرن فيه توكن خاص قديم
         if kiln.telegram_token and kiln.telegram_chat:
-            _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{title}</b>\n{message}")
+            _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{full_title}</b>\n{message}")
             return True
     else:
         if kiln.pushover_token and kiln.pushover_user:
-            _send_pushover(kiln.pushover_token, kiln.pushover_user, message, title)
+            _send_pushover(kiln.pushover_token, kiln.pushover_user, message, full_title)
             return True
     return False
 
