@@ -70,14 +70,30 @@ def _owner_telegram_chat(kiln, db=None) -> str | None:
         return None
 
 
+def _kiln_color_emoji(kiln) -> str:
+    """
+    يعطي كل فرن كرة ملونة ثابتة تميّزه عن باقي أفران العميل.
+    اللون مشتق من معرّف الفرن (id) فيبقى ثابتاً مدى الحياة،
+    ولا يتغيّر حتى لو حُذف فرن آخر.
+    """
+    balls = ["🔴", "🟢", "🔵", "🟡", "🟣", "🟠", "🟤", "⚪"]
+    kid = str(getattr(kiln, "id", "") or "")
+    if not kid:
+        return "🔥"
+    # مجموع رموز المعرّف يحدد اللون (توزيع ثابت ومتساوٍ)
+    idx = sum(ord(c) for c in kid) % len(balls)
+    return balls[idx]
+
+
 def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) -> bool:
     """يرسل عبر القناة المختارة لهذا الفرن. يرجّع True لو حاول الإرسال."""
-    # نضيف اسم الفرن للعنوان تلقائياً ليميّز العميل بين أفرانه المتعددة
+    # نضيف اسم الفرن + كرة لونه المميزة ليفرّق العميل بين أفرانه المتعددة
     kiln_name = (getattr(kiln, "name", None) or "").strip()
+    color = _kiln_color_emoji(kiln)
     if kiln_name:
-        full_title = f"🔥 {kiln_name} — {title}"
+        full_title = f"{color} {kiln_name} — {title}"
     else:
-        full_title = title
+        full_title = f"{color} {title}"
 
     if kiln.notify_channel == "telegram":
         # البوت المركزي (المرحلة ب): توكن واحد + chat صاحب الفرن
