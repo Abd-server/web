@@ -138,13 +138,16 @@ def request_stop(kiln_id: str, current_user: User = Depends(get_current_user), d
 @router.get("/device/stop-status", response_model=StopStatusResponse)
 def device_check_stop(kiln: Kiln = Depends(get_kiln_by_device_key), db: Session = Depends(get_db)):
     """
-    الأردوينو يسأل: هل فيه أمر إيقاف؟ نرجّع الحالة فقط دون أن ننزّل العلم.
-    هذا مهم: كود الأردوينو قد يستدعي هذا الفحص من عدة أماكن، فلو نزّلنا
-    العلم بأول سؤال لضاع الأمر قبل أن ينفّذه الأردوينو فعلياً.
-    العلم يبقى مرفوعاً حتى يؤكّد الأردوينو التنفيذ عبر /device/stop-confirm،
-    أو حتى يلغيه المستخدم.
+    الأردوينو يسأل: هل فيه أمر إيقاف؟
+    نمط "الاستهلاك لمرة واحدة": لو العلم مرفوع، نرجّعه true ثم ننزّله فوراً
+    في نفس اللحظة. هكذا يُسلّم الأمر مرة واحدة فقط ولا تحدث حلقة تكرار،
+    دون الاعتماد على تأكيد منفصل من الأردوينو قد يفشل لأسباب شبكية.
     """
-    return StopStatusResponse(stop_requested=bool(kiln.stop_requested))
+    was_requested = bool(kiln.stop_requested)
+    if was_requested:
+        kiln.stop_requested = 0   # ننزّل العلم فور تسليمه
+        db.commit()
+    return StopStatusResponse(stop_requested=was_requested)
 
 
 @router.post("/device/stop-confirm", status_code=200)
