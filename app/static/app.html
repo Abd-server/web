@@ -301,12 +301,27 @@
      <label>Pushover API Token</label>
      <input type="text" id="poToken" placeholder="a...">
    </div>
-   <!-- حقول تلجرام -->
+   <!-- ربط تلجرام (المرحلة ب) -->
    <div id="telegramFields" class="hidden">
-     <label>Telegram Bot Token</label>
-     <input type="text" id="tgToken" placeholder="123456:ABC...">
-     <label>Telegram Chat ID</label>
-     <input type="text" id="tgChat" placeholder="6395559567">
+     <div id="tgLinked" class="hidden" style="background:rgba(74,168,255,0.08);border:1px solid rgba(74,168,255,0.3);border-radius:10px;padding:14px;text-align:center;">
+       <p style="color:#4aa8ff;font-weight:bold;margin:0 0 8px;">✅ حسابك مربوط بتلجرام</p>
+       <p style="color:#aaa;font-size:12px;margin:0 0 10px;">ستصلك إشعارات كل أفرانك على تلجرام</p>
+       <button class="mini-btn" style="padding:8px 16px;" onclick="unlinkTelegram()">إلغاء الربط</button>
+     </div>
+     <div id="tgNotLinked" class="hidden">
+       <p style="color:#bbb;font-size:13px;margin:0 0 10px;">اربط حسابك بتلجرام مرة واحدة لتصلك إشعارات كل أفرانك.</p>
+       <button class="btn btn-primary" style="width:100%" onclick="getTelegramCode()">🔗 ربط تلجرام</button>
+       <div id="tgCodeBox" class="hidden" style="margin-top:14px;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
+         <p style="color:#aaa;font-size:13px;margin:0 0 8px;">1️⃣ افتح البوت: <a id="tgBotLink" href="#" target="_blank" style="color:#4aa8ff;">@KilnMonitor_bot</a></p>
+         <p style="color:#aaa;font-size:13px;margin:0 0 8px;">2️⃣ أرسل له هذا الرمز:</p>
+         <div style="display:flex;gap:8px;align-items:center;">
+           <code id="tgCode" style="flex:1;font-size:22px;letter-spacing:2px;text-align:center;background:#000;padding:12px;border-radius:8px;color:#4aff9e;"></code>
+           <button class="mini-btn" style="padding:12px;" onclick="copyTgCode()">📋</button>
+         </div>
+         <p style="color:#888;font-size:11px;margin:8px 0 0;text-align:center;">الرمز صالح لـ 10 دقائق. بعد إرساله، اضغط «تحديث الحالة».</p>
+         <button class="mini-btn" style="width:100%;margin-top:10px;padding:10px;" onclick="refreshTgStatus()">🔄 تحديث الحالة</button>
+       </div>
+     </div>
    </div>
 
    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:16px 0;">
@@ -641,10 +656,9 @@ async function openNotify() {
      // لا نعرض التوكنات (سرية)؛ نترك الحقول فارغة، وملؤها يحدّثها فقط
      document.getElementById('poUser').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'u...';
      document.getElementById('poToken').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'a...';
-     document.getElementById('tgToken').placeholder = s.telegram_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : '123456:ABC...';
-     document.getElementById('tgChat').placeholder = s.telegram_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : '6395559567';
    }
  } catch(e) {}
+ refreshTgStatus();
  openModal('notify');
 }
 async function saveNotify() {
@@ -657,12 +671,8 @@ async function saveNotify() {
  // التوكنات تُرسل فقط لو المستخدم كتب شيئاً
  const poUser = document.getElementById('poUser').value.trim();
  const poToken = document.getElementById('poToken').value.trim();
- const tgToken = document.getElementById('tgToken').value.trim();
- const tgChat = document.getElementById('tgChat').value.trim();
  if (poUser) payload.pushover_user = poUser;
  if (poToken) payload.pushover_token = poToken;
- if (tgToken) payload.telegram_token = tgToken;
- if (tgChat) payload.telegram_chat = tgChat;
  const r = await api('/kilns/' + currentKiln.id + '/notify', { method: 'PUT', body: JSON.stringify(payload) });
  if (r.ok) { alert('✅ تم حفظ الإعدادات!'); closeModal('notify'); }
  else { alert('❌ فشل الحفظ'); }
@@ -670,7 +680,41 @@ async function saveNotify() {
 async function testNotify() {
  const r = await api('/kilns/' + currentKiln.id + '/notify/test', { method: 'POST' });
  if (r.ok) alert('✅ تم إرسال الإشعار التجريبي!');
- else { const d = await r.json(); alert('❌ ' + (d.detail || 'فشل الإرسال') + '\n(احفظ التوكنات أولاً)'); }
+ else { const d = await r.json(); alert('❌ ' + (d.detail || 'فشل الإرسال') + '\n(اربط تلجرام أولاً)'); }
+}
+
+// ───── ربط تلجرام (المرحلة ب) ─────
+async function refreshTgStatus() {
+ try {
+   const r = await api('/auth/telegram/status');
+   if (r.ok) {
+     const s = await r.json();
+     document.getElementById('tgLinked').classList.toggle('hidden', !s.linked);
+     document.getElementById('tgNotLinked').classList.toggle('hidden', s.linked);
+     if (s.linked) document.getElementById('tgCodeBox').classList.add('hidden');
+   }
+ } catch(e) {}
+}
+async function getTelegramCode() {
+ const r = await api('/auth/telegram/link-code', { method: 'POST' });
+ if (r.ok) {
+   const d = await r.json();
+   document.getElementById('tgCode').textContent = d.code;
+   document.getElementById('tgBotLink').href = 'https://t.me/' + d.bot_username;
+   document.getElementById('tgBotLink').textContent = '@' + d.bot_username;
+   document.getElementById('tgCodeBox').classList.remove('hidden');
+ } else {
+   const d = await r.json(); alert('❌ ' + (d.detail || 'تعذّر إنشاء الرمز'));
+ }
+}
+function copyTgCode() {
+ const code = document.getElementById('tgCode').textContent;
+ navigator.clipboard.writeText(code).then(()=>alert('✅ نُسخ الرمز: ' + code));
+}
+async function unlinkTelegram() {
+ if (!confirm('هل تريد إلغاء ربط تلجرام؟')) return;
+ const r = await api('/auth/telegram/unlink', { method: 'POST' });
+ if (r.ok) { alert('تم إلغاء الربط'); refreshTgStatus(); }
 }
 
 // ───── سجل الأحداث ─────

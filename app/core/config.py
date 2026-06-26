@@ -48,6 +48,10 @@ class Settings:
     # رابط الموقع (لروابط الاسترجاع في الإيميل)
     SITE_URL: str = os.environ.get("SITE_URL", "https://furanfakhar.com")
 
+    # ─── بوت تيليجرام المركزي (المرحلة ب) ───
+    # توكن واحد لكل المنصة. يُوضع في متغيرات البيئة في Coolify فقط.
+    TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
     @classmethod
     def resend_configured(cls) -> bool:
         return bool(cls.RESEND_API_KEY)
@@ -60,6 +64,11 @@ class Settings:
     def is_production_ready(cls) -> bool:
         """تحذير إن كان السرّ ما زال القيمة المؤقتة."""
         return cls.JWT_SECRET != "CHANGE_ME_USE_ENV_VARIABLE_IN_PRODUCTION"
+
+
+    @classmethod
+    def telegram_configured(cls) -> bool:
+        return bool(cls.TELEGRAM_BOT_TOKEN)
 
 
 settings = Settings()

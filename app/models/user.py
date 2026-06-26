@@ -35,3 +35,8 @@ class User(Base):
     # ─── استرجاع كلمة المرور ───
     reset_code = Column(String, nullable=True)        # رمز من 6 أرقام
     reset_expires = Column(DateTime, nullable=True)   # ينتهي بعد 15 دقيقة
+
+    # ─── ربط تيليجرام (المرحلة ب) ───
+    telegram_chat = Column(String, nullable=True)        # chat_id بعد الربط
+    telegram_link_code = Column(String, nullable=True)   # رمز ربط مؤقت TG-xxxxxx
+    telegram_link_expires = Column(DateTime, nullable=True)  # ينتهي بعد 10 دقائق

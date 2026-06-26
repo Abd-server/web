@@ -14,6 +14,8 @@ import json
 import urllib.request
 import urllib.parse
 
+from app.core.config import settings
+
 H_NAMES = {
     0: "متوقف - في انتظار الإعدادات",
     1: "المؤقت",
@@ -48,9 +50,35 @@ def _send_telegram(token: str, chat_id: str, message: str) -> None:
         print(f"❌ خطأ تلجرام: {e}")
 
 
-def send_notification(kiln, message: str, title: str = "Kiln Monitor") -> bool:
+def _owner_telegram_chat(kiln, db=None) -> str | None:
+    """يجلب chat_id الخاص بمالك الفرن (الربط على مستوى الحساب)."""
+    # 1) لو الفرن نفسه فيه chat (ربط قديم) نستخدمه
+    if getattr(kiln, "telegram_chat", None):
+        return kiln.telegram_chat
+    # 2) غير ذلك نجلب chat الخاص بصاحب الفرن
+    try:
+        from app.models.user import User
+        from app.db.database import SessionLocal
+        own_db = db or SessionLocal()
+        owner = own_db.query(User).filter(User.id == kiln.owner_id).first()
+        chat = owner.telegram_chat if owner else None
+        if db is None:
+            own_db.close()
+        return chat
+    except Exception as e:
+        print(f"❌ خطأ جلب chat المالك: {e}")
+        return None
+
+
+def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) -> bool:
     """يرسل عبر القناة المختارة لهذا الفرن. يرجّع True لو حاول الإرسال."""
     if kiln.notify_channel == "telegram":
+        # البوت المركزي (المرحلة ب): توكن واحد + chat صاحب الفرن
+        chat = _owner_telegram_chat(kiln, db)
+        if settings.telegram_configured() and chat:
+            _send_telegram(settings.TELEGRAM_BOT_TOKEN, chat, f"<b>{title}</b>\n{message}")
+            return True
+        # توافق خلفي: لو الفرن فيه توكن خاص قديم
         if kiln.telegram_token and kiln.telegram_chat:
             _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{title}</b>\n{message}")
             return True
@@ -72,7 +100,7 @@ def process_reading_notifications(kiln, reading, db) -> None:
     H = reading.H
     if kiln.stage_notify and H is not None and H != kiln.last_stage and kiln.last_stage != -1:
         stage_name = H_NAMES.get(H, "--")
-        send_notification(kiln, f"🔔 تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة")
+        send_notification(kiln, f"🔔 تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة", db=db)
     if H is not None and H != kiln.last_stage:
         if kiln.last_stage != -1:
             # نسجّل الحدث في الأرشيف (حتى لو الإشعار معطّل)
@@ -87,7 +115,7 @@ def process_reading_notifications(kiln, reading, db) -> None:
     if kiln.notify_enabled and c1 is not None and kiln.notify_interval > 0:
         if c1 >= kiln.last_notified_temp + kiln.notify_interval:
             kiln.last_notified_temp = (int(c1) // kiln.notify_interval) * kiln.notify_interval
-            send_notification(kiln, f"🌡️ الحرارة وصلت إلى {int(c1)}°C")
+            send_notification(kiln, f"🌡️ الحرارة وصلت إلى {int(c1)}°C", db=db)
             log_event(db, kiln.id, "notification", f"🔔 الحرارة {int(c1)}°C",
                       message=f"وصلت الحرارة إلى {int(c1)}°C", color="#ffb74d", icon="🔔")
             changed = True
@@ -99,6 +127,7 @@ def process_reading_notifications(kiln, reading, db) -> None:
             kiln,
             f"🚨 تحذير! الحرارة {int(c1)}°C تجاوزت الحد بـ {int(c1 - x)} درجة!",
             title="⚠️ خطر",
+            db=db,
         )
 
     if changed:

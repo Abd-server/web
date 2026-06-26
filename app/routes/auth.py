@@ -156,3 +156,54 @@ def change_name(body: ChangeNameRequest,
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+# ═══════════════ ربط تيليجرام (المرحلة ب) ═══════════════
+
+from app.core.telegram_bot import generate_link_code, handle_update
+from app.core.config import settings as _settings
+from fastapi import Request
+
+
+@router.post("/telegram/link-code", status_code=200)
+def create_telegram_link_code(current_user: User = Depends(get_current_user),
+                              db: Session = Depends(get_db)):
+    """ينشئ رمز ربط مؤقت يعرضه الموقع للعميل لإرساله للبوت."""
+    if not _settings.telegram_configured():
+        raise HTTPException(status_code=503, detail="بوت تيليجرام غير مُهيّأ على الخادم")
+    code = generate_link_code(current_user, db)
+    return {"code": code, "expires_minutes": 10, "bot_username": "KilnMonitor_bot"}
+
+
+@router.get("/telegram/status", status_code=200)
+def telegram_status(current_user: User = Depends(get_current_user)):
+    """يخبر الواجهة هل الحساب مربوط بتيليجرام."""
+    return {"linked": bool(current_user.telegram_chat)}
+
+
+@router.post("/telegram/unlink", status_code=200)
+def telegram_unlink(current_user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
+    """يلغي الربط بتيليجرام."""
+    current_user.telegram_chat = None
+    current_user.telegram_link_code = None
+    current_user.telegram_link_expires = None
+    db.commit()
+    return {"message": "تم إلغاء ربط تيليجرام"}
+
+
+@router.post("/telegram/webhook/{secret}", include_in_schema=False)
+async def telegram_webhook(secret: str, request: Request,
+                           db: Session = Depends(get_db)):
+    """
+    نقطة استقبال رسائل البوت من تيليجرام.
+    الرابط يحتوي على سرّ (= التوكن) لمنع العبث من الخارج.
+    """
+    if secret != _settings.TELEGRAM_BOT_TOKEN:
+        raise HTTPException(status_code=403, detail="forbidden")
+    try:
+        update = await request.json()
+        handle_update(update, db)
+    except Exception as e:
+        print(f"❌ خطأ webhook تيليجرام: {e}")
+    return {"ok": True}

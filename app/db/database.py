@@ -50,3 +50,30 @@ def init_db():
     import app.models.user   # noqa
     import app.models.kiln    # noqa
     Base.metadata.create_all(bind=engine)
+    _migrate_telegram_columns()
+
+
+def _migrate_telegram_columns():
+    """
+    يضيف أعمدة تيليجرام لجدول users إن كان موجوداً مسبقاً (المرحلة ب).
+    create_all لا يضيف أعمدة لجدول قائم، فنضيفها يدوياً بأمان.
+    """
+    from sqlalchemy import text
+    cols = {
+        "telegram_chat": "VARCHAR",
+        "telegram_link_code": "VARCHAR",
+        "telegram_link_expires": "TIMESTAMP",
+    }
+    is_sqlite = _db_url.startswith("sqlite")
+    with engine.begin() as conn:
+        for name, sql_type in cols.items():
+            try:
+                if is_sqlite:
+                    # SQLite: نتجاهل الخطأ لو العمود موجود
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {sql_type}"))
+                else:
+                    conn.execute(text(
+                        f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {name} {sql_type}"
+                    ))
+            except Exception:
+                pass  # العمود موجود مسبقاً
