@@ -26,6 +26,23 @@ H_NAMES = {
 }
 
 
+def _send_ntfy(topic: str, message: str, title: str = "Kiln Monitor") -> None:
+    """
+    يرسل إشعاراً عبر ntfy.sh إلى موضوع العميل.
+    العربية لا تُدعم في ترويسة Title، لذا نضع العنوان داخل نص الإشعار نفسه.
+    """
+    try:
+        body = f"{title}\n{message}".encode("utf-8")
+        req = urllib.request.Request(
+            f"https://ntfy.sh/{topic}",
+            data=body,
+            headers={"Tags": "fire"},  # أيقونة 🔥 بجانب الإشعار
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"❌ خطأ ntfy: {e}")
+
+
 def _send_pushover(token: str, user: str, message: str, title: str = "Kiln Monitor") -> None:
     try:
         data = urllib.parse.urlencode({
@@ -70,6 +87,22 @@ def _owner_telegram_chat(kiln, db=None) -> str | None:
         return None
 
 
+def _owner_ntfy_topic(kiln, db=None) -> str | None:
+    """يجلب موضوع ntfy الخاص بمالك الفرن (الربط على مستوى الحساب)."""
+    try:
+        from app.models.user import User
+        from app.db.database import SessionLocal
+        own_db = db or SessionLocal()
+        owner = own_db.query(User).filter(User.id == kiln.owner_id).first()
+        topic = owner.ntfy_topic if owner else None
+        if db is None:
+            own_db.close()
+        return topic
+    except Exception as e:
+        print(f"❌ خطأ جلب موضوع ntfy المالك: {e}")
+        return None
+
+
 def _kiln_color_emoji(kiln) -> str:
     """
     يعطي كل فرن كرة ملونة ثابتة تميّزه عن باقي أفران العميل.
@@ -104,6 +137,11 @@ def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) 
         # توافق خلفي: لو الفرن فيه توكن خاص قديم
         if kiln.telegram_token and kiln.telegram_chat:
             _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{full_title}</b>\n{message}")
+            return True
+    elif kiln.notify_channel == "ntfy":
+        topic = _owner_ntfy_topic(kiln, db)
+        if topic:
+            _send_ntfy(topic, message, full_title)
             return True
     else:
         if kiln.pushover_token and kiln.pushover_user:

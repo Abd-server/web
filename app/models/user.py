@@ -40,3 +40,6 @@ class User(Base):
     telegram_chat = Column(String, nullable=True)        # chat_id بعد الربط
     telegram_link_code = Column(String, nullable=True)   # رمز ربط مؤقت TG-xxxxxx
     telegram_link_expires = Column(DateTime, nullable=True)  # ينتهي بعد 10 دقائق
+
+    # ─── ربط ntfy (قناة إشعارات بديلة، تفتح بالخليج) ───
+    ntfy_topic = Column(String, nullable=True)           # اسم الموضوع السري للعميل

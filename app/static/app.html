@@ -293,6 +293,7 @@
    <div style="display:flex;gap:10px;margin-bottom:15px;">
      <button id="btnPushover" class="mini-btn" style="flex:1;padding:12px;" onclick="setChannel('pushover')">📲 Pushover</button>
      <button id="btnTelegram" class="mini-btn" style="flex:1;padding:12px;" onclick="setChannel('telegram')">✈️ تلجرام</button>
+     <button id="btnNtfy" class="mini-btn" style="flex:1;padding:12px;" onclick="setChannel('ntfy')">🔔 ntfy</button>
    </div>
 
    <!-- حقول Pushover -->
@@ -328,7 +329,30 @@
      </div>
    </div>
 
-   <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:16px 0;">
+   <!-- ربط ntfy (قناة تفتح بالخليج) -->
+   <div id="ntfyFields" class="hidden">
+     <div id="ntfyLinked" class="hidden" style="background:rgba(74,255,158,0.08);border:1px solid rgba(74,255,158,0.3);border-radius:10px;padding:14px;text-align:center;">
+       <p style="color:#4aff9e;font-weight:bold;margin:0 0 8px;">✅ حسابك مربوط بـ ntfy</p>
+       <p style="color:#aaa;font-size:12px;margin:0 0 10px;">ستصلك إشعارات كل أفرانك على تطبيق ntfy</p>
+       <button class="mini-btn" style="padding:8px 16px;" onclick="unlinkNtfy()">إلغاء الربط</button>
+     </div>
+     <div id="ntfyNotLinked" class="hidden">
+       <p style="color:#bbb;font-size:13px;margin:0 0 10px;">ntfy تطبيق مجاني للإشعارات يعمل في كل المناطق. اربط حسابك مرة واحدة.</p>
+       <button class="btn btn-primary" style="width:100%" onclick="getNtfyTopic()">🔗 ربط ntfy</button>
+       <div id="ntfyBox" class="hidden" style="margin-top:14px;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
+         <p style="color:#aaa;font-size:13px;margin:0 0 8px;">1️⃣ نزّل تطبيق <b>ntfy</b> من المتجر (مجاني)</p>
+         <p style="color:#aaa;font-size:13px;margin:0 0 10px;text-align:center;">2️⃣ امسح الكود للاشتراك فوراً:</p>
+         <div id="ntfyQR" style="display:flex;justify-content:center;background:#fff;padding:12px;border-radius:10px;margin:0 auto 12px;width:fit-content;"></div>
+         <p style="color:#777;font-size:12px;margin:0 0 8px;text-align:center;">— أو افتح الرابط يدوياً —</p>
+         <div style="display:flex;gap:8px;align-items:center;">
+           <code id="ntfyUrl" style="flex:1;font-size:12px;text-align:center;background:#000;padding:10px;border-radius:8px;color:#4aff9e;word-break:break-all;"></code>
+           <button class="mini-btn" style="padding:10px;" onclick="copyNtfyUrl()">📋</button>
+         </div>
+         <button class="mini-btn" style="width:100%;margin-top:10px;padding:10px;" onclick="refreshNtfyStatus()">🔄 تحديث الحالة</button>
+       </div>
+     </div>
+   </div>
+
 
    <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0;">
      <span style="color:#aaa;font-size:13px;">🌡️ تفعيل الإشعار الدوري</span>
@@ -645,8 +669,12 @@ function setChannel(ch) {
  document.getElementById('btnPushover').style.borderColor = ch==='pushover' ? '#f953c6' : 'rgba(255,255,255,0.12)';
  document.getElementById('btnTelegram').style.color = ch==='telegram' ? '#4aa8ff' : '#aaa';
  document.getElementById('btnTelegram').style.borderColor = ch==='telegram' ? '#4aa8ff' : 'rgba(255,255,255,0.12)';
+ document.getElementById('btnNtfy').style.color = ch==='ntfy' ? '#4aff9e' : '#aaa';
+ document.getElementById('btnNtfy').style.borderColor = ch==='ntfy' ? '#4aff9e' : 'rgba(255,255,255,0.12)';
  document.getElementById('pushoverFields').classList.toggle('hidden', ch!=='pushover');
  document.getElementById('telegramFields').classList.toggle('hidden', ch!=='telegram');
+ document.getElementById('ntfyFields').classList.toggle('hidden', ch!=='ntfy');
+ if (ch==='ntfy') refreshNtfyStatus();
 }
 async function openNotify() {
  try {
@@ -726,6 +754,43 @@ async function unlinkTelegram() {
  if (!confirm('هل تريد إلغاء ربط تلجرام؟')) return;
  const r = await api('/auth/telegram/unlink', { method: 'POST' });
  if (r.ok) { alert('تم إلغاء الربط'); refreshTgStatus(); }
+}
+
+// ───── ربط ntfy ─────
+async function refreshNtfyStatus() {
+ try {
+   const r = await api('/auth/ntfy/status');
+   if (r.ok) {
+     const s = await r.json();
+     document.getElementById('ntfyLinked').classList.toggle('hidden', !s.linked);
+     document.getElementById('ntfyNotLinked').classList.toggle('hidden', s.linked);
+     if (s.linked) document.getElementById('ntfyBox').classList.add('hidden');
+   }
+ } catch(e) {}
+}
+async function getNtfyTopic() {
+ const r = await api('/auth/ntfy/link', { method: 'POST' });
+ if (r.ok) {
+   const d = await r.json();
+   // رابط ntfy:// يفتح التطبيق ويشترك مباشرة عند المسح
+   const appLink = 'ntfy://ntfy.sh/' + d.topic;
+   document.getElementById('ntfyUrl').textContent = d.url;
+   const qrBox = document.getElementById('ntfyQR');
+   qrBox.innerHTML = '';
+   new QRCode(qrBox, { text: appLink, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+   document.getElementById('ntfyBox').classList.remove('hidden');
+ } else {
+   const d = await r.json(); alert('❌ ' + (d.detail || 'تعذّر إنشاء الموضوع'));
+ }
+}
+function copyNtfyUrl() {
+ const url = document.getElementById('ntfyUrl').textContent;
+ navigator.clipboard.writeText(url).then(()=>alert('✅ نُسخ الرابط'));
+}
+async function unlinkNtfy() {
+ if (!confirm('هل تريد إلغاء ربط ntfy؟')) return;
+ const r = await api('/auth/ntfy/unlink', { method: 'POST' });
+ if (r.ok) { alert('تم إلغاء الربط'); refreshNtfyStatus(); }
 }
 
 // ───── سجل الأحداث ─────

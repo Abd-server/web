@@ -207,3 +207,40 @@ async def telegram_webhook(secret: str, request: Request,
     except Exception as e:
         print(f"❌ خطأ webhook تيليجرام: {e}")
     return {"ok": True}
+
+
+# ═══════════════ ربط ntfy (قناة بديلة تفتح بالخليج) ═══════════════
+
+import secrets as _secrets
+
+
+@router.post("/ntfy/link", status_code=200)
+def create_ntfy_topic(current_user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    """
+    ينشئ (أو يرجّع) موضوع ntfy السري للعميل.
+    الموضوع عشوائي طويل ليصعب تخمينه = خصوصية معقولة.
+    """
+    if not current_user.ntfy_topic:
+        current_user.ntfy_topic = "furanfakhar-" + _secrets.token_hex(8)
+        db.commit()
+    return {
+        "topic": current_user.ntfy_topic,
+        "url": f"https://ntfy.sh/{current_user.ntfy_topic}",
+    }
+
+
+@router.get("/ntfy/status", status_code=200)
+def ntfy_status(current_user: User = Depends(get_current_user)):
+    """يخبر الواجهة هل الحساب عنده موضوع ntfy."""
+    return {"linked": bool(current_user.ntfy_topic),
+            "topic": current_user.ntfy_topic or ""}
+
+
+@router.post("/ntfy/unlink", status_code=200)
+def ntfy_unlink(current_user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    """يلغي موضوع ntfy (يوقف الإشعارات على هذه القناة)."""
+    current_user.ntfy_topic = None
+    db.commit()
+    return {"message": "تم إلغاء ربط ntfy"}
