@@ -88,13 +88,16 @@ def _owner_telegram_chat(kiln, db=None) -> str | None:
 
 
 def _owner_ntfy_topic(kiln, db=None) -> str | None:
-    """يجلب موضوع ntfy الخاص بمالك الفرن (الربط على مستوى الحساب)."""
+    """يجلب موضوع ntfy الخاص بمالك الفرن، فقط إن كان مفعّلاً."""
     try:
         from app.models.user import User
         from app.db.database import SessionLocal
         own_db = db or SessionLocal()
         owner = own_db.query(User).filter(User.id == kiln.owner_id).first()
-        topic = owner.ntfy_topic if owner else None
+        # نرسل فقط لو الموضوع موجود والربط مفعّل
+        topic = None
+        if owner and owner.ntfy_topic and getattr(owner, "ntfy_enabled", False):
+            topic = owner.ntfy_topic
         if db is None:
             own_db.close()
         return topic

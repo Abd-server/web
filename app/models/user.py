@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, Boolean
 
 from app.db.database import Base
 
@@ -42,4 +42,5 @@ class User(Base):
     telegram_link_expires = Column(DateTime, nullable=True)  # ينتهي بعد 10 دقائق
 
     # ─── ربط ntfy (قناة إشعارات بديلة، تفتح بالخليج) ───
-    ntfy_topic = Column(String, nullable=True)           # اسم الموضوع السري للعميل
+    ntfy_topic = Column(String, nullable=True)           # اسم الموضوع السري للعميل (ثابت مدى الحياة)
+    ntfy_enabled = Column(Boolean, default=False, nullable=False)  # هل الربط مفعّل حالياً

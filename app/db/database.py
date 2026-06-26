@@ -64,6 +64,7 @@ def _migrate_telegram_columns():
         "telegram_link_code": "VARCHAR",
         "telegram_link_expires": "TIMESTAMP",
         "ntfy_topic": "VARCHAR",
+        "ntfy_enabled": "BOOLEAN DEFAULT FALSE",
     }
     is_sqlite = _db_url.startswith("sqlite")
     with engine.begin() as conn:
