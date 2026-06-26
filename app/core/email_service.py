@@ -44,6 +44,7 @@ def _send_via_resend(to_email: str, subject: str, html_body: str) -> bool:
             headers={
                 "Authorization": f"Bearer {settings.RESEND_API_KEY}",
                 "Content-Type": "application/json",
+                "User-Agent": "furan-platform/1.0",
             },
             method="POST",
         )
