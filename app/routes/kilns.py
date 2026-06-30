@@ -306,3 +306,141 @@ def export_events_csv(kiln_id: str, current_user: User = Depends(get_current_use
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}_events.csv"'},
     )
+
+
+@router.get("/kilns/{kiln_id}/export.xlsx")
+def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    تقرير Excel موحّد وملوّن: ورقة 'سجل الأحداث' (كل مرحلة بلونها) + ورقة 'القراءات'.
+    تصميم عصري: ترويسات ملوّنة، صفوف بألوان المراحل، تجميد الترويسة، عرض أعمدة مناسب.
+    """
+    import io
+    from fastapi.responses import StreamingResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from app.models.kiln import Event
+
+    kiln = _get_owned_kiln(kiln_id, current_user, db)
+
+    # ───── ألوان المراحل (نفس ألوان المنصة، بصيغة ARGB) ─────
+    STAGE_FILL = {
+        "متوقف": "FFECECEC", "المؤقت": "FFE3F2FD", "الحرق التصاعدي": "FFFFE9DD",
+        "التثبيت": "FFFFEBEE", "النزول التدريجي": "FFE0F7FA", "انتهى": "FFE8F5E9",
+    }
+    STAGE_TEXT = {
+        "متوقف": "FF616161", "المؤقت": "FF1565C0", "الحرق التصاعدي": "FFE64A19",
+        "التثبيت": "FFC62828", "النزول التدريجي": "FF00838F", "انتهى": "FF2E7D32",
+    }
+    TYPE_FILL = {
+        "تحوّل مرحلة": "FFFFE9DD", "إشعار حرارة": "FFFFF8E1", "إيقاف إجباري": "FFFFEBEE",
+    }
+    TYPE_TEXT = {
+        "تحوّل مرحلة": "FFE64A19", "إشعار حرارة": "FFF9A825", "إيقاف إجباري": "FFC62828",
+    }
+    H_NAMES = {0: "متوقف", 1: "المؤقت", 2: "الحرق التصاعدي", 3: "التثبيت", 4: "النزول التدريجي", 5: "انتهى"}
+
+    thin = Side(style="thin", color="FFE0E0E0")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="FF2D2D3A")
+    header_font = Font(name="Arial", bold=True, color="FFFFFFFF", size=11)
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    right = Alignment(horizontal="right", vertical="center")
+
+    wb = Workbook()
+
+    # ═══════════ الورقة 1: سجل الأحداث ═══════════
+    ws1 = wb.active
+    ws1.title = "سجل الأحداث"
+    ws1.sheet_view.rightToLeft = True
+
+    # عنوان كبير
+    ws1.merge_cells("A1:D1")
+    tcell = ws1["A1"]
+    tcell.value = f"🔥 سجل أحداث الفرن: {kiln.name or ''}"
+    tcell.font = Font(name="Arial", bold=True, size=16, color="FFFF2D75")
+    tcell.alignment = center
+    ws1.row_dimensions[1].height = 34
+
+    headers1 = ["الوقت", "النوع", "العنوان", "التفاصيل"]
+    for col, h in enumerate(headers1, 1):
+        c = ws1.cell(row=2, column=col, value=h)
+        c.fill = header_fill; c.font = header_font; c.alignment = center; c.border = border
+    ws1.row_dimensions[2].height = 24
+
+    type_ar = {"stage": "تحوّل مرحلة", "notification": "إشعار حرارة", "stop": "إيقاف إجباري"}
+    events = db.query(Event).filter(Event.kiln_id == kiln_id).order_by(Event.created_at.asc()).all()
+
+    r = 3
+    for ev in events:
+        t = ev.created_at.strftime("%Y-%m-%d %H:%M:%S") if ev.created_at else ""
+        type_name = type_ar.get(ev.type, ev.type)
+        vals = [t, type_name, ev.title or "", ev.message or ""]
+        fill_color = TYPE_FILL.get(type_name, "FFFFFFFF")
+        text_color = TYPE_TEXT.get(type_name, "FF000000")
+        for col, v in enumerate(vals, 1):
+            c = ws1.cell(row=r, column=col, value=v)
+            c.fill = PatternFill("solid", fgColor=fill_color)
+            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 2))
+            c.alignment = right if col == 4 else center
+            c.border = border
+        r += 1
+
+    widths1 = [20, 16, 24, 40]
+    for i, w in enumerate(widths1, 1):
+        ws1.column_dimensions[get_column_letter(i)].width = w
+    ws1.freeze_panes = "A3"
+
+    # ═══════════ الورقة 2: القراءات ═══════════
+    ws2 = wb.create_sheet("القراءات")
+    ws2.sheet_view.rightToLeft = True
+
+    ws2.merge_cells("A1:H1")
+    t2 = ws2["A1"]
+    t2.value = f"📊 قراءات الفرن: {kiln.name or ''}"
+    t2.font = Font(name="Arial", bold=True, size=16, color="FF4776E6")
+    t2.alignment = center
+    ws2.row_dimensions[1].height = 34
+
+    headers2 = ["الوقت", "حرارة حقيقية", "حرارة افتراضية", "الدرجة النهائية", "الساعات", "المرحلة", "المراحل", "النزول"]
+    for col, h in enumerate(headers2, 1):
+        c = ws2.cell(row=2, column=col, value=h)
+        c.fill = header_fill; c.font = header_font; c.alignment = center; c.border = border
+    ws2.row_dimensions[2].height = 24
+
+    readings = db.query(Reading).filter(Reading.kiln_id == kiln_id).order_by(Reading.recorded_at.asc()).all()
+
+    r = 3
+    for rd in readings:
+        t = rd.recorded_at.strftime("%Y-%m-%d %H:%M:%S") if rd.recorded_at else ""
+        stage = H_NAMES.get(rd.H, "—")
+        vals = [
+            t, rd.c1, rd.i1, rd.x, rd.h, stage,
+            "مفعّل" if rd.MARAHEL == 1 else "—",
+            "مفعّل" if rd.DOWN == 1 else "—",
+        ]
+        fill_color = STAGE_FILL.get(stage, "FFFFFFFF")
+        text_color = STAGE_TEXT.get(stage, "FF000000")
+        for col, v in enumerate(vals, 1):
+            c = ws2.cell(row=r, column=col, value=v)
+            c.fill = PatternFill("solid", fgColor=fill_color)
+            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 6))
+            c.alignment = center
+            c.border = border
+        r += 1
+
+    widths2 = [20, 13, 14, 14, 9, 16, 11, 9]
+    for i, w in enumerate(widths2, 1):
+        ws2.column_dimensions[get_column_letter(i)].width = w
+    ws2.freeze_panes = "A3"
+
+    # ───── حفظ ─────
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe_name = (kiln.name or "kiln").replace(" ", "_")
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}_report.xlsx"'},
+    )

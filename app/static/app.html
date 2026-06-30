@@ -277,10 +277,7 @@
  <div id="eventsView" class="hidden">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
      <span class="back" onclick="backFromEvents()">→ لوحة التحكم</span>
-     <div style="display:flex;gap:8px;">
-       <button class="btn btn-green" onclick="downloadEventsCsv()" style="padding:8px 16px;font-size:12px;">⬇️ سجل الأحداث</button>
-       <button class="btn btn-secondary" onclick="downloadCsv()" style="padding:8px 16px;font-size:12px;">⬇️ القراءات</button>
-     </div>
+     <button class="btn btn-green" onclick="downloadReport()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل التقرير (Excel)</button>
    </div>
    <h1>🗂️ سجل الأحداث</h1>
    <p class="subtitle">أرشيف الأحداث المهمة لهذا الفرن</p>
@@ -909,6 +906,18 @@ async function loadEvents() {
  }
 }
 
+function downloadReport() {
+ fetch('/kilns/' + currentKiln.id + '/export.xlsx', { headers: { 'Authorization': 'Bearer ' + token } })
+   .then(r => r.blob())
+   .then(blob => {
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url; a.download = (currentKiln.name || 'kiln') + '_report.xlsx';
+     document.body.appendChild(a); a.click(); a.remove();
+     URL.revokeObjectURL(url);
+   })
+   .catch(() => alert('تعذّر التحميل'));
+}
 function downloadCsv() {
  // التحميل يحتاج التوكن في الترويسة، فنجلبه كـ blob
  fetch('/kilns/' + currentKiln.id + '/export.csv', { headers: { 'Authorization': 'Bearer ' + token } })
