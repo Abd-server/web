@@ -256,11 +256,19 @@
  <div class="overlay" id="overlayDevice"><div class="modal">
    <div class="modal-header"><h2>🔌 مفتاح الجهاز (للأردوينو)</h2><button class="btn-close" onclick="closeModal('device')">✕</button></div>
    <div class="device-box">
-     <p style="color:#888;font-size:13px;margin-bottom:12px;">ضع هذا المفتاح في كود الأردوينو ليرسل القراءات لهذا الفرن.</p>
+     <p style="color:#888;font-size:13px;margin-bottom:12px;">ضع هذا المفتاح في كود الأردوينو (أو انسخه للصقه في صفحة إعداد الجهاز).</p>
      <div class="key-row">
        <code id="deviceKey">••••••••••••</code>
        <button class="mini-btn" onclick="toggleKey()" id="keyToggleBtn">إظهار</button>
-       <button class="mini-btn" onclick="rotateKey()">تجديد</button>
+       <button class="mini-btn" onclick="copyKey()">📋 نسخ</button>
+     </div>
+     <div id="keyQr" style="text-align:center;margin-top:16px;display:none;">
+       <img id="keyQrImg" alt="QR" style="width:180px;height:180px;background:#fff;padding:8px;border-radius:10px;" />
+       <p style="color:#888;font-size:12px;margin-top:8px;">امسح هذا الرمز لنسخ المفتاح</p>
+     </div>
+     <div style="margin-top:18px;border-top:1px solid #2a2a35;padding-top:14px;">
+       <button class="mini-btn" style="background:#3a2a2a;color:#ff8a8a;" onclick="rotateKey()">⚠️ تجديد المفتاح</button>
+       <p style="color:#666;font-size:11px;margin-top:6px;">التجديد يوقف المفتاح القديم فوراً — للطوارئ فقط.</p>
      </div>
    </div>
  </div></div>
@@ -627,17 +635,54 @@ async function refreshData() {
 }
 
 // ───── المفتاح ─────
-function toggleKey() {
- const stored = localStorage.getItem('dk_' + currentKiln.id);
- if (keyVisible) { document.getElementById('deviceKey').textContent = '••••••••••••'; document.getElementById('keyToggleBtn').textContent = 'إظهار'; keyVisible = false; }
- else { document.getElementById('deviceKey').textContent = stored || '— اضغط "تجديد" للحصول على مفتاح —'; document.getElementById('keyToggleBtn').textContent = 'إخفاء'; keyVisible = true; }
+let currentDeviceKey = '';
+
+async function loadDeviceKey() {
+ try {
+   const r = await api('/kilns/' + currentKiln.id + '/device-key');
+   if (r.ok) {
+     const d = await r.json();
+     currentDeviceKey = d.device_key;
+     localStorage.setItem('dk_' + currentKiln.id, d.device_key);
+     // عرض QR للمفتاح (عبر خدمة توليد QR من صورة)
+     const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(d.device_key);
+     document.getElementById('keyQrImg').src = qr;
+     document.getElementById('keyQr').style.display = 'block';
+   }
+ } catch(e) { console.error(e); }
 }
+
+function toggleKey() {
+ if (keyVisible) { document.getElementById('deviceKey').textContent = '••••••••••••'; document.getElementById('keyToggleBtn').textContent = 'إظهار'; keyVisible = false; }
+ else { document.getElementById('deviceKey').textContent = currentDeviceKey || '— جارٍ التحميل —'; document.getElementById('keyToggleBtn').textContent = 'إخفاء'; keyVisible = true; }
+}
+
+async function copyKey() {
+ if (!currentDeviceKey) { alert('المفتاح لم يُحمّل بعد'); return; }
+ try {
+   await navigator.clipboard.writeText(currentDeviceKey);
+   alert('✅ تم نسخ المفتاح');
+ } catch(e) {
+   // طريقة احتياطية
+   const ta = document.createElement('textarea'); ta.value = currentDeviceKey;
+   document.body.appendChild(ta); ta.select();
+   try { document.execCommand('copy'); alert('✅ تم نسخ المفتاح'); } catch(_) { alert('انسخ يدوياً: ' + currentDeviceKey); }
+   ta.remove();
+ }
+}
+
 async function rotateKey() {
- if (!confirm('سيتوقف المفتاح القديم فوراً. متابعة؟')) return;
- const r = await api('/kilns/' + currentKiln.id + '/rotate-key', { method: 'POST' });
- if (r.ok) { const d = await r.json(); localStorage.setItem('dk_' + currentKiln.id, d.device_key);
+ // حماية قوية: العميل يكتب كلمة "تجديد" يدوياً لمنع الضغط بالخطأ
+ const ans = prompt('⚠️ تحذير: تجديد المفتاح يوقف الفرن فوراً حتى تحدّث المفتاح في الجهاز.\n\nاكتب كلمة "تجديد" للمتابعة:');
+ if (ans === null) return;
+ if (ans.trim() !== 'تجديد') { alert('لم يتم التأكيد. أُلغي التجديد.'); return; }
+ const r = await api('/kilns/' + currentKiln.id + '/rotate-key', { method: 'POST', body: JSON.stringify({ confirm: 'تجديد' }) });
+ if (r.ok) { const d = await r.json(); currentDeviceKey = d.device_key; localStorage.setItem('dk_' + currentKiln.id, d.device_key);
    document.getElementById('deviceKey').textContent = d.device_key; document.getElementById('keyToggleBtn').textContent = 'إخفاء'; keyVisible = true;
-   alert('تم توليد مفتاح جديد. انسخه الآن وضعه في الأردوينو.'); }
+   const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(d.device_key);
+   document.getElementById('keyQrImg').src = qr;
+   alert('تم توليد مفتاح جديد. انسخه الآن وضعه في الجهاز.'); }
+ else { alert('تعذّر التجديد'); }
 }
 async function deleteKiln() {
  if (!confirm('حذف هذا الفرن وكل قراءاته نهائياً؟')) return;
@@ -659,7 +704,8 @@ async function addKiln() {
 
 // ───── النوافذ ─────
 function openModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop',account:'overlayAccount'};
- if(t==='device'){ document.getElementById('deviceKey').textContent='••••••••••••'; document.getElementById('keyToggleBtn').textContent='إظهار'; keyVisible=false; }
+ if(t==='device'){ document.getElementById('deviceKey').textContent='••••••••••••'; document.getElementById('keyToggleBtn').textContent='إظهار'; keyVisible=false;
+   document.getElementById('keyQr').style.display='none'; loadDeviceKey(); }
  document.getElementById(m[t]).classList.add('active'); }
 function closeModal(t){ const m={marahel:'overlayMarahel',log:'overlayLog',device:'overlayDevice',add:'overlayAdd',notify:'overlayNotify',stop:'overlayStop',account:'overlayAccount'}; document.getElementById(m[t]).classList.remove('active'); }
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); }));

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -98,8 +98,18 @@ def get_latest_reading(kiln_id: str, current_user: User = Depends(get_current_us
     return reading
 
 
+@router.get("/kilns/{kiln_id}/device-key", response_model=KilnWithKeyResponse)
+def get_device_key(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """يرجّع مفتاح الجهاز للمالك (يُعرض من السيرفر، فيظهر على أي متصفح/جهاز)."""
+    kiln = _get_owned_kiln(kiln_id, current_user, db)
+    return kiln
+
+
 @router.post("/kilns/{kiln_id}/rotate-key", response_model=KilnWithKeyResponse)
-def rotate_device_key(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def rotate_device_key(kiln_id: str, body: dict = Body(default={}), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # حماية: يجب إرسال تأكيد صريح (confirm=="تجديد") لمنع الضغط بالخطأ
+    if str(body.get("confirm", "")).strip() != "تجديد":
+        raise HTTPException(status_code=400, detail="يلزم تأكيد التجديد")
     kiln = _get_owned_kiln(kiln_id, current_user, db)
     kiln.device_key = generate_device_key()
     db.commit(); db.refresh(kiln)
