@@ -23,6 +23,17 @@ from app.models.kiln_schemas import (
     EventResponse,
 )
 
+from datetime import timedelta
+
+# توقيت سلطنة عُمان = UTC+4. الأوقات تُحفظ بـ UTC، فنحوّلها للعرض.
+OMAN_OFFSET = timedelta(hours=4)
+
+def _oman_time(dt):
+    """يحوّل وقت UTC إلى توقيت سلطنة عُمان (+4) ويُرجّعه نصاً، أو '' لو فارغ."""
+    if not dt:
+        return ""
+    return (dt + OMAN_OFFSET).strftime("%Y-%m-%d %H:%M:%S")
+
 router = APIRouter(tags=["الأفران"])
 
 
@@ -252,7 +263,7 @@ def export_readings_csv(kiln_id: str, current_user: User = Depends(get_current_u
         for (key, _) in columns:
             val = getattr(r, key, "")
             if key == "recorded_at" and val:
-                val = val.strftime("%Y-%m-%d %H:%M:%S")
+                val = _oman_time(val)
             elif key == "H":
                 val = H_NAMES.get(val, val)
             elif key == "ElectricOff":
@@ -291,7 +302,7 @@ def export_events_csv(kiln_id: str, current_user: User = Depends(get_current_use
     writer = csv.writer(out)
     writer.writerow(["الوقت", "النوع", "العنوان", "التفاصيل"])
     for ev in rows:
-        t = ev.created_at.strftime("%Y-%m-%d %H:%M:%S") if ev.created_at else ""
+        t = _oman_time(ev.created_at)
         writer.writerow([
             t,
             type_ar.get(ev.type, ev.type),
@@ -373,7 +384,7 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
 
     r = 3
     for ev in events:
-        t = ev.created_at.strftime("%Y-%m-%d %H:%M:%S") if ev.created_at else ""
+        t = _oman_time(ev.created_at)
         type_name = type_ar.get(ev.type, ev.type)
         vals = [t, type_name, ev.title or "", ev.message or ""]
         fill_color = TYPE_FILL.get(type_name, "FFFFFFFF")
@@ -412,7 +423,7 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
 
     r = 3
     for rd in readings:
-        t = rd.recorded_at.strftime("%Y-%m-%d %H:%M:%S") if rd.recorded_at else ""
+        t = _oman_time(rd.recorded_at)
         stage = H_NAMES.get(rd.H, "—")
         vals = [
             t, rd.c1, rd.i1, rd.x, rd.h, stage,

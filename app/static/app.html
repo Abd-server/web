@@ -450,6 +450,21 @@ const hStatus = {
 
 let currentKiln = null, pollTimer = null, chart = null, keyVisible = false;
 
+// تحويل وقت UTC (من السيرفر) إلى توقيت سلطنة عُمان (+4)
+function omanTime(raw, mode) {
+ if (!raw) return '';
+ // raw مثل "2026-06-26 13:34:23" (UTC). نضيف 4 ساعات.
+ const d = new Date(raw.replace(' ', 'T') + 'Z');
+ if (isNaN(d)) return raw;
+ const o = new Date(d.getTime() + 4 * 3600 * 1000);
+ const p = n => String(n).padStart(2, '0');
+ const date = o.getUTCFullYear() + '-' + p(o.getUTCMonth() + 1) + '-' + p(o.getUTCDate());
+ const time = p(o.getUTCHours()) + ':' + p(o.getUTCMinutes()) + ':' + p(o.getUTCSeconds());
+ if (mode === 'date') return date;
+ if (mode === 'time') return time;
+ return date + ' ' + time;
+}
+
 async function api(path, opts = {}) {
  const r = await fetch(path, { ...opts, headers: { ...authHeaders, ...(opts.headers||{}) } });
  if (r.status === 401) { logout(); throw new Error('انتهت الجلسة'); }
@@ -612,10 +627,10 @@ async function refreshData() {
 
    const hInfo = hStatus[parseInt(last.H)] || { text: '--', cls: 'ps-0' };
    const hEl = document.getElementById('sH'); hEl.textContent = hInfo.text; hEl.className = 'program-badge ' + hInfo.cls;
-   document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + (last.recorded_at || '').slice(11, 19);
+   document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + omanTime(last.recorded_at, 'time');
 
    const recent = logs.slice(-50);
-   chart.data.labels = recent.map(d => (d.recorded_at||'').slice(11, 19));
+   chart.data.labels = recent.map(d => omanTime(d.recorded_at, 'time'));
    chart.data.datasets[0].data = recent.map(d => d.c1);
    chart.data.datasets[1].data = recent.map(d => d.i1);
    chart.update();
@@ -623,7 +638,7 @@ async function refreshData() {
    const tbody = document.getElementById('logTable'); tbody.innerHTML = '';
    [...logs].reverse().forEach(d => {
      const ht = hStatus[parseInt(d.H)] ? hStatus[parseInt(d.H)].text : '--';
-     tbody.innerHTML += `<tr><td>${(d.recorded_at||'').slice(11,19)}</td><td>${fmt(d.c1,1)}</td><td>${fmt(d.i1,1)}</td>
+     tbody.innerHTML += `<tr><td>${omanTime(d.recorded_at, 'time')}</td><td>${fmt(d.c1,1)}</td><td>${fmt(d.i1,1)}</td>
        <td>${d.wiresActive||'--'}</td><td>${fmt(d.x,0)}</td><td>${fmt(d.h,1)}</td>
        <td>${parseInt(d.MARAHEL)===1?'مفعّل':'غير'}</td><td>${parseInt(d.DOWN)===1?'مفعّل':'غير'}</td>
        <td>${parseInt(d.ElectricOff)===1?'⚠️ خلل':'يعمل'}</td><td>${ht}</td></tr>`;
@@ -878,7 +893,7 @@ async function loadEvents() {
  const days = {};
  const dayNames = ['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
  events.forEach(ev => {
-   const dateStr = (ev.created_at || '').slice(0, 10);
+   const dateStr = omanTime(ev.created_at, 'date');
    if (!days[dateStr]) days[dateStr] = [];
    days[dateStr].push(ev);
  });
@@ -900,7 +915,7 @@ async function loadEvents() {
          <div style="font-weight:bold;color:${ev.color};font-size:14px;margin-bottom:4px;">${escapeHtml(ev.title)}</div>
          <div style="color:#aaa;font-size:13px;line-height:1.6;">${escapeHtml(ev.message||'')}</div>
        </div>
-       <div style="color:#555;font-size:12px;white-space:nowrap;">${(ev.created_at||'').slice(11,19)}</div>`;
+       <div style="color:#555;font-size:12px;white-space:nowrap;">${omanTime(ev.created_at, 'time')}</div>`;
      tl.appendChild(card);
    });
  }
