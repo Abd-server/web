@@ -140,15 +140,51 @@ def rotate_device_key(kiln_id: str, body: dict = Body(default={}), current_user:
 
 @router.post("/device/readings", response_model=ReadingResponse, status_code=201)
 def ingest_reading(body: ReadingIngest, kiln: Kiln = Depends(get_kiln_by_device_key), db: Session = Depends(get_db)):
-    """يستقبل قراءة من الأردوينو بكل الحقول. الفرن يُحدَّد من X-Device-Key."""
+    """
+    يستقبل قراءة من الأردوينو. الفرن يُحدَّد من X-Device-Key.
+    - يُخزّن قراءة واحدة كل دقيقة (يتجاهل الأكثر تكراراً لتقليل حجم البيانات).
+    - يحذف القراءات الأقدم من 6 أشهر تلقائياً (تنظيف دوري خفيف).
+    - الأحداث (تحوّل المرحلة/الإيقاف) تُسجّل دائماً عبر معالجة الإشعارات، حتى لو لم تُخزّن القراءة.
+    """
+    from datetime import datetime, timezone as _tz, timedelta
+
     reading = Reading(kiln_id=kiln.id, **body.dict(exclude_unset=True))
-    db.add(reading); db.commit(); db.refresh(reading)
-    # معالجة الإشعارات (تغيّر المرحلة، الإشعار الدوري، تجاوز الحد)
+
+    # هل مرّت دقيقة على آخر قراءة مخزّنة؟
+    last = (
+        db.query(Reading).filter(Reading.kiln_id == kiln.id)
+        .order_by(Reading.recorded_at.desc()).first()
+    )
+    store_it = True
+    if last and last.recorded_at:
+        elapsed = datetime.utcnow() - last.recorded_at
+        if elapsed < timedelta(seconds=58):   # أقل من دقيقة → لا نخزّن
+            store_it = False
+
+    saved_reading = last  # افتراضياً نُرجّع الأخيرة لو لم نخزّن
+    if store_it:
+        db.add(reading); db.commit(); db.refresh(reading)
+        saved_reading = reading
+
+        # تنظيف دوري: حذف الأقدم من 6 أشهر (يُنفّذ أحياناً فقط لتقليل الحمل)
+        try:
+            import random
+            if random.random() < 0.02:   # ~2% من الكتابات تُشغّل التنظيف
+                cutoff = datetime.utcnow() - timedelta(days=183)
+                db.query(Reading).filter(
+                    Reading.kiln_id == kiln.id, Reading.recorded_at < cutoff
+                ).delete(synchronize_session=False)
+                db.commit()
+        except Exception as e:
+            print(f"تنبيه: تعذّر تنظيف القراءات القديمة: {e}")
+
+    # معالجة الإشعارات دائماً (حتى لو لم نخزّن القراءة) — لرصد تحوّل المرحلة والإيقاف
     try:
         process_reading_notifications(kiln, reading, db)
     except Exception as e:
         print(f"تنبيه: تعذّرت معالجة الإشعارات: {e}")
-    return reading
+
+    return saved_reading if saved_reading else reading
 
 
 # ═════════════ الإيقاف الإجباري ═════════════
@@ -464,3 +500,56 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}_report.xlsx"'},
     )
+
+
+@router.get("/kilns/{kiln_id}/timeline")
+def get_timeline(kiln_id: str, period: str = "day", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    السجل الموحّد: قراءات + أحداث متسلسلة زمنياً، مع فلتر بالفترة.
+    period: day | week | month | all
+    يُرجّع عناصر مرتّبة زمنياً، كل عنصر إما 'reading' أو 'event'.
+    """
+    from datetime import datetime, timedelta
+    from app.models.kiln import Event
+
+    kiln = _get_owned_kiln(kiln_id, current_user, db)
+    tz = current_user.timezone or "Asia/Muscat"
+
+    # نطاق الفترة
+    now = datetime.utcnow()
+    ranges = {"day": timedelta(days=1), "week": timedelta(days=7), "month": timedelta(days=30)}
+    since = None if period == "all" else now - ranges.get(period, ranges["day"])
+
+    rq = db.query(Reading).filter(Reading.kiln_id == kiln_id)
+    eq = db.query(Event).filter(Event.kiln_id == kiln_id)
+    if since is not None:
+        rq = rq.filter(Reading.recorded_at >= since)
+        eq = eq.filter(Event.created_at >= since)
+
+    readings = rq.order_by(Reading.recorded_at.asc()).all()
+    events = eq.order_by(Event.created_at.asc()).all()
+
+    H_NAMES = {0: "متوقف", 1: "المؤقت", 2: "الحرق التصاعدي", 3: "التثبيت", 4: "النزول التدريجي", 5: "انتهى"}
+
+    items = []
+    for rd in readings:
+        items.append({
+            "kind": "reading",
+            "ts": rd.recorded_at.isoformat() if rd.recorded_at else "",
+            "time": _local_time(rd.recorded_at, tz),
+            "c1": rd.c1, "i1": rd.i1, "x": rd.x, "h": rd.h,
+            "H": rd.H, "stage": H_NAMES.get(rd.H, "—"),
+            "MARAHEL": rd.MARAHEL, "DOWN": rd.DOWN,
+        })
+    for ev in events:
+        items.append({
+            "kind": "event",
+            "ts": ev.created_at.isoformat() if ev.created_at else "",
+            "time": _local_time(ev.created_at, tz),
+            "type": ev.type, "title": ev.title, "message": ev.message,
+            "color": ev.color, "icon": ev.icon,
+        })
+
+    # ترتيب زمني موحّد
+    items.sort(key=lambda x: x["ts"])
+    return {"kiln_name": kiln.name or "", "period": period, "count": len(items), "items": items}

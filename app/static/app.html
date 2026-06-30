@@ -145,6 +145,35 @@
  .msg { display:none; padding:10px 14px; border-radius:10px; font-size:13px; margin-top:6px; }
  .msg.err { display:block; background:rgba(255,65,108,0.12); color:#ff8fa3; }
  .msg.ok { display:block; background:rgba(60,200,120,0.12); color:#6ee7a0; }
+ /* ═══ السجل الكامل ═══ */
+ .tl-controls{ max-width:840px; margin:0 auto; display:flex; flex-direction:column; gap:14px; }
+ .tl-periods{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+ .tl-pbtn{ padding:8px 18px; border-radius:20px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#aaa; font-family:inherit; font-size:13px; cursor:pointer; transition:.2s; }
+ .tl-pbtn:hover{ border-color:#ff2d75; color:#fff; }
+ .tl-pbtn.active{ background:linear-gradient(90deg,#ff2d75,#ff8a3d); color:#fff; border-color:transparent; font-weight:600; }
+ .tl-cols{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; padding:12px; background:rgba(255,255,255,.03); border-radius:12px; }
+ .tl-cols label{ display:flex; align-items:center; gap:6px; font-size:13px; color:#bbb; cursor:pointer; }
+ .tl-cols input{ accent-color:#ff2d75; width:16px; height:16px; cursor:pointer; }
+ .tl-tbl{ background:#13131a; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.06); }
+ .tl-head, .tl-row{ display:grid; gap:8px; padding:12px 18px; align-items:center; font-size:13px; }
+ .tl-head{ background:#1c1c26; font-size:12px; color:#999; font-weight:600; position:sticky; top:0; }
+ .tl-row{ border-bottom:1px solid rgba(255,255,255,.03); transition:.15s; }
+ .tl-row:hover{ filter:brightness(1.15); }
+ .tl-t{ color:#888; font-size:12px; font-variant-numeric:tabular-nums; }
+ .tl-v{ font-weight:600; font-variant-numeric:tabular-nums; color:#eee; }
+ /* ألوان المراحل (خفيفة + شريط جانبي) */
+ .st-0{ border-right:3px solid #9e9e9e; background:linear-gradient(90deg,rgba(158,158,158,.07),transparent); }
+ .st-1{ border-right:3px solid #42a5f5; background:linear-gradient(90deg,rgba(66,165,245,.07),transparent); }
+ .st-2{ border-right:3px solid #ff7043; background:linear-gradient(90deg,rgba(255,112,67,.07),transparent); }
+ .st-3{ border-right:3px solid #ef5350; background:linear-gradient(90deg,rgba(239,83,80,.07),transparent); }
+ .st-4{ border-right:3px solid #26c6da; background:linear-gradient(90deg,rgba(38,198,218,.07),transparent); }
+ .st-5{ border-right:3px solid #66bb6a; background:linear-gradient(90deg,rgba(102,187,106,.07),transparent); }
+ /* سطر حدث بارز */
+ .tl-event{ display:flex; align-items:center; gap:12px; padding:12px 18px; font-size:13px; font-weight:600; border-bottom:1px solid rgba(255,255,255,.03); }
+ .tl-event.ev-stage{ background:linear-gradient(90deg,rgba(255,112,67,.18),transparent); border-right:3px solid #ff7043; color:#ffb59a; }
+ .tl-event.ev-stop{ background:linear-gradient(90deg,rgba(239,83,80,.2),transparent); border-right:3px solid #ef5350; color:#ff9a98; }
+ .tl-event.ev-notification{ background:linear-gradient(90deg,rgba(255,183,77,.15),transparent); border-right:3px solid #ffb74d; color:#ffd699; }
+ .tl-ebadge{ font-size:11px; padding:3px 10px; border-radius:20px; background:rgba(0,0,0,.3); margin-right:auto; }
 </style>
 </head>
 <body>
@@ -277,7 +306,10 @@
  <div id="eventsView" class="hidden">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
      <span class="back" onclick="backFromEvents()">→ لوحة التحكم</span>
-     <button class="btn btn-green" onclick="downloadReport()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل التقرير (Excel)</button>
+     <div style="display:flex;gap:8px;">
+       <button class="btn btn-primary" onclick="showTimeline()" style="padding:8px 16px;font-size:12px;">📜 السجل الكامل</button>
+       <button class="btn btn-green" onclick="downloadReport()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل (Excel)</button>
+     </div>
    </div>
    <h1>🗂️ سجل الأحداث</h1>
    <p class="subtitle">أرشيف الأحداث المهمة لهذا الفرن</p>
@@ -291,6 +323,37 @@
 
    <div id="eventsTimeline" style="max-width:700px;margin:0 auto;"></div>
    <p id="eventsEmpty" class="empty-hint hidden">لا توجد أحداث بعد.</p>
+ </div>
+
+ <!-- ═══ شاشة السجل الكامل (قراءات + أحداث) ═══ -->
+ <div id="timelineView" class="hidden">
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+     <span class="back" onclick="backFromTimeline()">→ سجل الأحداث</span>
+     <button class="btn btn-green" onclick="downloadReport()" style="padding:8px 16px;font-size:12px;">⬇️ تحميل (Excel)</button>
+   </div>
+   <h1>📜 السجل الكامل</h1>
+   <p class="subtitle">كل القراءات والأحداث متسلسلة، وكل مرحلة بلونها</p>
+
+   <!-- فلتر الفترة -->
+   <div class="tl-controls">
+     <div class="tl-periods">
+       <button class="tl-pbtn active" data-period="day" onclick="setTlPeriod('day',this)">آخر يوم</button>
+       <button class="tl-pbtn" data-period="week" onclick="setTlPeriod('week',this)">آخر أسبوع</button>
+       <button class="tl-pbtn" data-period="month" onclick="setTlPeriod('month',this)">آخر شهر</button>
+       <button class="tl-pbtn" data-period="all" onclick="setTlPeriod('all',this)">الكل</button>
+     </div>
+     <div class="tl-cols">
+       <label><input type="checkbox" class="tl-col" value="c1" checked onchange="renderTimeline()"> حرارة حقيقية</label>
+       <label><input type="checkbox" class="tl-col" value="i1" checked onchange="renderTimeline()"> افتراضية</label>
+       <label><input type="checkbox" class="tl-col" value="x" checked onchange="renderTimeline()"> الدرجة</label>
+       <label><input type="checkbox" class="tl-col" value="h" onchange="renderTimeline()"> الساعات</label>
+       <label><input type="checkbox" class="tl-col" value="stage" checked onchange="renderTimeline()"> المرحلة</label>
+     </div>
+   </div>
+
+   <div id="tlContent" style="max-width:840px;margin:18px auto;"></div>
+   <p id="tlEmpty" class="empty-hint hidden">لا توجد بيانات في هذه الفترة.</p>
+   <p id="tlLoading" class="empty-hint hidden">جارٍ التحميل…</p>
  </div>
 
  <!-- نافذة الإشعارات -->
@@ -934,6 +997,80 @@ function backFromEvents() {
  refreshData();
  if (pollTimer) clearInterval(pollTimer);
  pollTimer = setInterval(refreshData, 3000);
+}
+
+// ───── السجل الكامل ─────
+let tlPeriod = 'day';
+let tlData = [];
+
+async function showTimeline() {
+ document.getElementById('eventsView').classList.add('hidden');
+ document.getElementById('timelineView').classList.remove('hidden');
+ await loadTimeline();
+}
+function backFromTimeline() {
+ document.getElementById('timelineView').classList.add('hidden');
+ document.getElementById('eventsView').classList.remove('hidden');
+}
+function setTlPeriod(p, btn) {
+ tlPeriod = p;
+ document.querySelectorAll('.tl-pbtn').forEach(b => b.classList.remove('active'));
+ btn.classList.add('active');
+ loadTimeline();
+}
+async function loadTimeline() {
+ document.getElementById('tlLoading').classList.remove('hidden');
+ document.getElementById('tlEmpty').classList.add('hidden');
+ document.getElementById('tlContent').innerHTML = '';
+ try {
+   const r = await api('/kilns/' + currentKiln.id + '/timeline?period=' + tlPeriod);
+   if (r.ok) {
+     const d = await r.json();
+     tlData = d.items || [];
+     renderTimeline();
+   }
+ } catch(e) { console.error(e); }
+ document.getElementById('tlLoading').classList.add('hidden');
+}
+function renderTimeline() {
+ const cont = document.getElementById('tlContent');
+ if (!tlData.length) {
+   cont.innerHTML = '';
+   document.getElementById('tlEmpty').classList.remove('hidden');
+   return;
+ }
+ document.getElementById('tlEmpty').classList.add('hidden');
+
+ // الأعمدة المختارة
+ const cols = Array.from(document.querySelectorAll('.tl-col:checked')).map(c => c.value);
+ const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة' };
+ const gridCols = '90px ' + cols.map(()=>'1fr').join(' ');
+
+ let html = '<div class="tl-tbl">';
+ // ترويسة
+ html += '<div class="tl-head" style="grid-template-columns:'+gridCols+'"><div>الوقت</div>';
+ cols.forEach(c => html += '<div>'+colNames[c]+'</div>');
+ html += '</div>';
+
+ tlData.forEach(it => {
+   if (it.kind === 'event') {
+     const cls = 'ev-' + (it.type||'');
+     html += '<div class="tl-event '+cls+'"><span>'+(it.icon||'•')+'</span><span>'+(it.title||'')+'</span><span class="tl-ebadge">'+(it.time||'').slice(11,19)+'</span></div>';
+   } else {
+     html += '<div class="tl-row st-'+(it.H!=null?it.H:0)+'" style="grid-template-columns:'+gridCols+'">';
+     html += '<span class="tl-t">'+(it.time||'').slice(11,19)+'</span>';
+     cols.forEach(c => {
+       let v = it[c];
+       if (c==='stage') v = it.stage || '—';
+       else if (v==null) v = '—';
+       else if (c!=='h') v = v+'°';
+       html += '<span class="tl-v">'+v+'</span>';
+     });
+     html += '</div>';
+   }
+ });
+ html += '</div>';
+ cont.innerHTML = html;
 }
 
 async function loadEvents() {
