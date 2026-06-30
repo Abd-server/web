@@ -399,6 +399,38 @@
 
    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:20px 0;">
 
+   <!-- المنطقة الزمنية -->
+   <h3 style="color:#4aa8ff;font-size:15px;margin:8px 0;">🌍 المنطقة الزمنية</h3>
+   <label>اختر دولتك (تُعرض الأوقات حسبها)</label>
+   <select id="accTz" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #333;background:#0f0f14;color:#fff;font-size:15px;">
+     <option value="Asia/Muscat">🇴🇲 عُمان (مسقط) — UTC+4</option>
+     <option value="Asia/Riyadh">🇸🇦 السعودية (الرياض) — UTC+3</option>
+     <option value="Asia/Dubai">🇦🇪 الإمارات (دبي) — UTC+4</option>
+     <option value="Asia/Kuwait">🇰🇼 الكويت — UTC+3</option>
+     <option value="Asia/Qatar">🇶🇦 قطر (الدوحة) — UTC+3</option>
+     <option value="Asia/Bahrain">🇧🇭 البحرين — UTC+3</option>
+     <option value="Asia/Baghdad">🇮🇶 العراق (بغداد) — UTC+3</option>
+     <option value="Asia/Amman">🇯🇴 الأردن (عمّان) — UTC+3</option>
+     <option value="Asia/Beirut">🇱🇧 لبنان (بيروت) — UTC+2/3</option>
+     <option value="Africa/Cairo">🇪🇬 مصر (القاهرة) — UTC+2</option>
+     <option value="Asia/Istanbul">🇹🇷 تركيا (إسطنبول) — UTC+3</option>
+     <option value="Asia/Tehran">🇮🇷 إيران (طهران) — UTC+3:30</option>
+     <option value="Asia/Karachi">🇵🇰 باكستان (كراتشي) — UTC+5</option>
+     <option value="Asia/Kolkata">🇮🇳 الهند — UTC+5:30</option>
+     <option value="Asia/Dhaka">🇧🇩 بنغلاديش (دكا) — UTC+6</option>
+     <option value="Europe/London">🇬🇧 بريطانيا (لندن) — UTC+0/1</option>
+     <option value="Europe/Paris">🇫🇷 فرنسا (باريس) — UTC+1/2</option>
+     <option value="Europe/Berlin">🇩🇪 ألمانيا (برلين) — UTC+1/2</option>
+     <option value="Europe/Moscow">🇷🇺 روسيا (موسكو) — UTC+3</option>
+     <option value="America/New_York">🇺🇸 أمريكا (نيويورك) — UTC-5/4</option>
+     <option value="America/Chicago">🇺🇸 أمريكا (شيكاغو) — UTC-6/5</option>
+     <option value="America/Los_Angeles">🇺🇸 أمريكا (لوس أنجلوس) — UTC-8/7</option>
+     <option value="UTC">🌐 التوقيت العالمي (UTC)</option>
+   </select>
+   <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="saveTimezone()">💾 حفظ المنطقة الزمنية</button>
+
+   <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:20px 0;">
+
    <!-- تغيير كلمة المرور -->
    <h3 style="color:#4aa8ff;font-size:15px;margin:8px 0;">🔒 تغيير كلمة المرور</h3>
    <label>كلمة المرور الحالية</label>
@@ -450,19 +482,36 @@ const hStatus = {
 
 let currentKiln = null, pollTimer = null, chart = null, keyVisible = false;
 
-// تحويل وقت UTC (من السيرفر) إلى توقيت سلطنة عُمان (+4)
+// المنطقة الزمنية المختارة للمستخدم (تُحمّل من /auth/me)
+let userTimezone = 'Asia/Muscat';
+
+// تحويل وقت UTC (من السيرفر) إلى المنطقة الزمنية المختارة
 function omanTime(raw, mode) {
  if (!raw) return '';
- // raw مثل "2026-06-26 13:34:23" (UTC). نضيف 4 ساعات.
  const d = new Date(raw.replace(' ', 'T') + 'Z');
  if (isNaN(d)) return raw;
- const o = new Date(d.getTime() + 4 * 3600 * 1000);
- const p = n => String(n).padStart(2, '0');
- const date = o.getUTCFullYear() + '-' + p(o.getUTCMonth() + 1) + '-' + p(o.getUTCDate());
- const time = p(o.getUTCHours()) + ':' + p(o.getUTCMinutes()) + ':' + p(o.getUTCSeconds());
- if (mode === 'date') return date;
- if (mode === 'time') return time;
- return date + ' ' + time;
+ try {
+   const fmt = new Intl.DateTimeFormat('en-CA', {
+     timeZone: userTimezone, year:'numeric', month:'2-digit', day:'2-digit',
+     hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+   });
+   const parts = {};
+   fmt.formatToParts(d).forEach(p => parts[p.type] = p.value);
+   const date = parts.year + '-' + parts.month + '-' + parts.day;
+   let hh = parts.hour === '24' ? '00' : parts.hour;
+   const time = hh + ':' + parts.minute + ':' + parts.second;
+   if (mode === 'date') return date;
+   if (mode === 'time') return time;
+   return date + ' ' + time;
+ } catch(e) {
+   // احتياطي: +4
+   const o = new Date(d.getTime() + 4 * 3600 * 1000);
+   const p = n => String(n).padStart(2, '0');
+   const date = o.getUTCFullYear() + '-' + p(o.getUTCMonth()+1) + '-' + p(o.getUTCDate());
+   const time = p(o.getUTCHours()) + ':' + p(o.getUTCMinutes()) + ':' + p(o.getUTCSeconds());
+   if (mode === 'date') return date; if (mode === 'time') return time;
+   return date + ' ' + time;
+ }
 }
 
 async function api(path, opts = {}) {
@@ -480,6 +529,7 @@ async function loadUser() {
  if (r.ok) {
    currentUser = await r.json();
    document.getElementById('userEmail').textContent = currentUser.email;
+   if (currentUser.timezone) userTimezone = currentUser.timezone;
  }
 }
 
@@ -488,6 +538,7 @@ function openAccount() {
  if (currentUser) {
    document.getElementById('accEmail').textContent = currentUser.email;
    document.getElementById('accName').value = currentUser.full_name || '';
+   if (currentUser.timezone) document.getElementById('accTz').value = currentUser.timezone;
  }
  document.getElementById('accMsg').className = 'msg';
  document.getElementById('accCurPass').value = '';
@@ -504,6 +555,17 @@ async function saveName() {
  const r = await api('/auth/change-name', { method:'POST', body: JSON.stringify({ full_name: name }) });
  if (r.ok) { currentUser = await r.json(); accMsg('✅ تم حفظ الاسم', 'ok'); }
  else { accMsg('تعذّر حفظ الاسم', 'err'); }
+}
+async function saveTimezone() {
+ const tz = document.getElementById('accTz').value;
+ const r = await api('/auth/me/timezone', { method:'POST', body: JSON.stringify({ timezone: tz }) });
+ if (r.ok) {
+   currentUser = await r.json();
+   userTimezone = tz;
+   accMsg('✅ تم حفظ المنطقة الزمنية', 'ok');
+   // إعادة تحميل البيانات المعروضة بالتوقيت الجديد
+   if (typeof refreshData === 'function' && currentKiln) refreshData();
+ } else { accMsg('تعذّر حفظ المنطقة الزمنية', 'err'); }
 }
 async function savePassword() {
  const cur = document.getElementById('accCurPass').value;

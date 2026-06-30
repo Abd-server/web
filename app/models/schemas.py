@@ -42,6 +42,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str]
     role: str
     created_at: datetime
+    timezone: Optional[str] = "Asia/Muscat"
 
     class Config:
         from_attributes = True  # يسمح بالتحويل من نموذج SQLAlchemy

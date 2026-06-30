@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -31,6 +31,15 @@ from app.models.schemas import (
 )
 
 router = APIRouter(prefix="/auth", tags=["المصادقة"])
+
+# المناطق الزمنية المدعومة (اسم IANA → يُعرض في القائمة بالواجهة)
+VALID_TIMEZONES = {
+    "Asia/Muscat", "Asia/Riyadh", "Asia/Dubai", "Asia/Kuwait", "Asia/Qatar",
+    "Asia/Bahrain", "Asia/Baghdad", "Asia/Amman", "Asia/Beirut", "Asia/Jerusalem",
+    "Africa/Cairo", "Asia/Tehran", "Asia/Karachi", "Asia/Kolkata", "Asia/Dhaka",
+    "Asia/Istanbul", "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
+    "America/New_York", "America/Chicago", "America/Los_Angeles", "UTC",
+}
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
@@ -81,6 +90,18 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.post("/me/timezone", response_model=UserResponse)
+def update_timezone(body: dict = Body(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """تحديث المنطقة الزمنية للمستخدم (اسم IANA مثل Asia/Muscat)."""
+    tz = str(body.get("timezone", "")).strip()
+    # تحقق بسيط: نقبل فقط أسماء IANA صالحة معروفة لدينا
+    if tz not in VALID_TIMEZONES:
+        raise HTTPException(status_code=400, detail="منطقة زمنية غير صالحة")
+    current_user.timezone = tz
+    db.commit(); db.refresh(current_user)
     return current_user
 
 

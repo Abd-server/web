@@ -44,3 +44,6 @@ class User(Base):
     # ─── ربط ntfy (قناة إشعارات بديلة، تفتح بالخليج) ───
     ntfy_topic = Column(String, nullable=True)           # اسم الموضوع السري للعميل (ثابت مدى الحياة)
     ntfy_enabled = Column(Boolean, default=False, nullable=False)  # هل الربط مفعّل حالياً
+
+    # المنطقة الزمنية (اسم IANA مثل Asia/Muscat) — تُستخدم لعرض الأوقات
+    timezone = Column(String, default="Asia/Muscat", nullable=True)
