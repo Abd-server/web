@@ -451,18 +451,24 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
     ws2 = wb.create_sheet("القراءات")
     ws2.sheet_view.rightToLeft = True
 
-    ws2.merge_cells("A1:H1")
+    ws2.merge_cells("A1:U1")
     t2 = ws2["A1"]
     t2.value = f"📊 قراءات الفرن: {kiln.name or ''}"
     t2.font = Font(name="Arial", bold=True, size=16, color="FF4776E6")
     t2.alignment = center
     ws2.row_dimensions[1].height = 34
 
-    headers2 = ["الوقت", "حرارة حقيقية", "حرارة افتراضية", "الدرجة النهائية", "الساعات", "المرحلة", "المراحل", "النزول"]
+    headers2 = [
+        "الوقت", "المرحلة", "حرارة حقيقية", "حرارة افتراضية", "الدرجة النهائية",
+        "الساعات الجارية", "وقت المرحلة", "مدة التثبيت", "دقائق التثبيت",
+        "ساعات متبقية", "دقائق متبقية",
+        "حرارة مرحلة1", "وقت مرحلة1", "حرارة مرحلة2", "وقت مرحلة2", "حرارة مرحلة3", "وقت مرحلة3",
+        "المراحل", "النزول التدريجي", "عطل الحساس", "الأسلاك",
+    ]
     for col, h in enumerate(headers2, 1):
         c = ws2.cell(row=2, column=col, value=h)
         c.fill = header_fill; c.font = header_font; c.alignment = center; c.border = border
-    ws2.row_dimensions[2].height = 24
+    ws2.row_dimensions[2].height = 30
 
     readings = db.query(Reading).filter(Reading.kiln_id == kiln_id).order_by(Reading.recorded_at.asc()).all()
 
@@ -471,24 +477,29 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
         t = _local_time(rd.recorded_at, current_user.timezone or 'Asia/Muscat')
         stage = H_NAMES.get(rd.H, "—")
         vals = [
-            t, rd.c1, rd.i1, rd.x, rd.h, stage,
+            t, stage, rd.c1, rd.i1, rd.x,
+            rd.h, rd.t, rd.D, rd.mD,
+            rd.ht, rd.mt,
+            rd.x1, rd.t1, rd.x2, rd.t2, rd.x3, rd.t3,
             "مفعّل" if rd.MARAHEL == 1 else "—",
             "مفعّل" if rd.DOWN == 1 else "—",
+            "نعم" if rd.ElectricOff == 1 else "—",
+            rd.wiresActive if rd.wiresActive else "—",
         ]
         fill_color = STAGE_FILL.get(stage, "FFFFFFFF")
         text_color = STAGE_TEXT.get(stage, "FF000000")
         for col, v in enumerate(vals, 1):
             c = ws2.cell(row=r, column=col, value=v)
             c.fill = PatternFill("solid", fgColor=fill_color)
-            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 6))
+            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 2))
             c.alignment = center
             c.border = border
         r += 1
 
-    widths2 = [20, 13, 14, 14, 9, 16, 11, 9]
+    widths2 = [20, 16, 12, 13, 12, 12, 11, 11, 11, 11, 11, 12, 11, 12, 11, 12, 11, 10, 13, 11, 12]
     for i, w in enumerate(widths2, 1):
         ws2.column_dimensions[get_column_letter(i)].width = w
-    ws2.freeze_panes = "A3"
+    ws2.freeze_panes = "C3"
 
     # ───── حفظ ─────
     buf = io.BytesIO()

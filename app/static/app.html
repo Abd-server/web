@@ -1044,7 +1044,7 @@ function renderTimeline() {
  // الأعمدة المختارة
  const cols = Array.from(document.querySelectorAll('.tl-col:checked')).map(c => c.value);
  const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة' };
- const gridCols = '90px ' + cols.map(()=>'1fr').join(' ');
+ const gridCols = '110px ' + cols.map(()=>'1fr').join(' ');
 
  let html = '<div class="tl-tbl">';
  // ترويسة
@@ -1055,10 +1055,10 @@ function renderTimeline() {
  tlData.forEach(it => {
    if (it.kind === 'event') {
      const cls = 'ev-' + (it.type||'');
-     html += '<div class="tl-event '+cls+'"><span>'+(it.icon||'•')+'</span><span>'+(it.title||'')+'</span><span class="tl-ebadge">'+(it.time||'').slice(11,19)+'</span></div>';
+     html += '<div class="tl-event '+cls+'"><span>'+(it.icon||'•')+'</span><span>'+(it.title||'')+'</span><span class="tl-ebadge">'+(it.time||'')+'</span></div>';
    } else {
      html += '<div class="tl-row st-'+(it.H!=null?it.H:0)+'" style="grid-template-columns:'+gridCols+'">';
-     html += '<span class="tl-t">'+(it.time||'').slice(11,19)+'</span>';
+     html += '<span class="tl-t">'+((it.time||'').slice(0,10))+'<br><b style="color:#aaa;">'+((it.time||'').slice(11,19))+'</b></span>';
      cols.forEach(c => {
        let v = it[c];
        if (c==='stage') v = it.stage || '—';
