@@ -367,10 +367,12 @@ def export_events_csv(kiln_id: str, current_user: User = Depends(get_current_use
 @router.get("/kilns/{kiln_id}/export.xlsx")
 def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    تقرير Excel موحّد وملوّن: ورقة 'سجل الأحداث' (كل مرحلة بلونها) + ورقة 'القراءات'.
-    تصميم عصري: ترويسات ملوّنة، صفوف بألوان المراحل، تجميد الترويسة، عرض أعمدة مناسب.
+    تقرير Excel موحّد في ورقة واحدة: كل القراءات والأحداث متسلسلة زمنياً.
+    - صفوف القراءات: 21 عموداً بكل المتغيرات، ملوّنة حسب المرحلة.
+    - صفوف الأحداث: العمود A فيه الوقت، والباقي مدموج فيه نص الحدث بلون بارز.
     """
     import io
+    from datetime import datetime
     from fastapi.responses import StreamingResponse
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -378,130 +380,118 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
     from app.models.kiln import Event
 
     kiln = _get_owned_kiln(kiln_id, current_user, db)
+    tz = current_user.timezone or "Asia/Muscat"
 
-    # ───── ألوان المراحل (نفس ألوان المنصة، بصيغة ARGB) ─────
-    STAGE_FILL = {
-        "متوقف": "FFECECEC", "المؤقت": "FFE3F2FD", "الحرق التصاعدي": "FFFFE9DD",
-        "التثبيت": "FFFFEBEE", "النزول التدريجي": "FFE0F7FA", "انتهى": "FFE8F5E9",
-    }
-    STAGE_TEXT = {
-        "متوقف": "FF616161", "المؤقت": "FF1565C0", "الحرق التصاعدي": "FFE64A19",
-        "التثبيت": "FFC62828", "النزول التدريجي": "FF00838F", "انتهى": "FF2E7D32",
-    }
-    TYPE_FILL = {
-        "تحوّل مرحلة": "FFFFE9DD", "إشعار حرارة": "FFFFF8E1", "إيقاف إجباري": "FFFFEBEE",
-    }
-    TYPE_TEXT = {
-        "تحوّل مرحلة": "FFE64A19", "إشعار حرارة": "FFF9A825", "إيقاف إجباري": "FFC62828",
-    }
     H_NAMES = {0: "متوقف", 1: "المؤقت", 2: "الحرق التصاعدي", 3: "التثبيت", 4: "النزول التدريجي", 5: "انتهى"}
+    # ألوان خلفية القراءات حسب المرحلة (فاتحة)
+    STAGE_FILL = {
+        "متوقف": "FFF0F0F0", "المؤقت": "FFDCEEFF", "الحرق التصاعدي": "FFFFE0D0",
+        "التثبيت": "FFFFDADA", "النزول التدريجي": "FFD4F4F9", "انتهى": "FFDCF5DE", "—": "FFFFFFFF",
+    }
+    # ألوان صفوف الأحداث (غامقة/بارزة) حسب نوع الحدث
+    EVENT_FILL = {"stage": "FFFF7043", "notification": "FFFFB74D", "stop": "FFEF5350"}
+    EVENT_TEXT = "FFFFFFFF"
 
     thin = Side(style="thin", color="FFE0E0E0")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     header_fill = PatternFill("solid", fgColor="FF2D2D3A")
-    header_font = Font(name="Arial", bold=True, color="FFFFFFFF", size=11)
+    header_font = Font(name="Arial", bold=True, color="FFFFFFFF", size=10)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     right = Alignment(horizontal="right", vertical="center")
 
     wb = Workbook()
+    ws = wb.active
+    ws.title = "سجل الفرن"
+    ws.sheet_view.rightToLeft = True
 
-    # ═══════════ الورقة 1: سجل الأحداث ═══════════
-    ws1 = wb.active
-    ws1.title = "سجل الأحداث"
-    ws1.sheet_view.rightToLeft = True
+    headers = [
+        "الوقت والتاريخ", "الحرارة الحقيقية", "الحرارة الافتراضية", "الدرجة النهائية",
+        "الساعات الجارية", "وقت المرحلة الواحدة", "مدة التثبيت", "دقائق التثبيت الجارية",
+        "ساعات متبقية", "دقائق متبقية", "حالة البرنامج", "المراحل", "النزول التدريجي",
+        "حالة الأسلاك", "حالة الحساس",
+        "حرارة المرحلة 1", "وقت المرحلة 1", "حرارة المرحلة 2", "وقت المرحلة 2",
+        "حرارة المرحلة 3", "وقت المرحلة 3",
+    ]
+    NCOL = len(headers)  # 21
 
-    # عنوان كبير
-    ws1.merge_cells("A1:D1")
-    tcell = ws1["A1"]
-    tcell.value = f"🔥 سجل أحداث الفرن: {kiln.name or ''}"
-    tcell.font = Font(name="Arial", bold=True, size=16, color="FFFF2D75")
+    # ───── العنوان الكبير ─────
+    ws.merge_cells(f"A1:{get_column_letter(NCOL)}1")
+    created = _local_time(datetime.utcnow(), tz)[:16]
+    tcell = ws["A1"]
+    tcell.value = f"📋 سجل الفرن الكامل — القراءات والأحداث المهمة   (أُنشئ في {created})"
+    tcell.font = Font(name="Arial", bold=True, size=14, color="FFFF2D75")
     tcell.alignment = center
-    ws1.row_dimensions[1].height = 34
+    ws.row_dimensions[1].height = 30
 
-    headers1 = ["الوقت", "النوع", "العنوان", "التفاصيل"]
-    for col, h in enumerate(headers1, 1):
-        c = ws1.cell(row=2, column=col, value=h)
+    # ───── الترويسات ─────
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=2, column=col, value=h)
         c.fill = header_fill; c.font = header_font; c.alignment = center; c.border = border
-    ws1.row_dimensions[2].height = 24
+    ws.row_dimensions[2].height = 34
 
-    type_ar = {"stage": "تحوّل مرحلة", "notification": "إشعار حرارة", "stop": "إيقاف إجباري"}
+    # ───── جمع القراءات والأحداث ودمجها زمنياً ─────
+    readings = db.query(Reading).filter(Reading.kiln_id == kiln_id).order_by(Reading.recorded_at.asc()).all()
     events = db.query(Event).filter(Event.kiln_id == kiln_id).order_by(Event.created_at.asc()).all()
 
-    r = 3
-    for ev in events:
-        t = _local_time(ev.created_at, current_user.timezone or 'Asia/Muscat')
-        type_name = type_ar.get(ev.type, ev.type)
-        vals = [t, type_name, ev.title or "", ev.message or ""]
-        fill_color = TYPE_FILL.get(type_name, "FFFFFFFF")
-        text_color = TYPE_TEXT.get(type_name, "FF000000")
-        for col, v in enumerate(vals, 1):
-            c = ws1.cell(row=r, column=col, value=v)
-            c.fill = PatternFill("solid", fgColor=fill_color)
-            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 2))
-            c.alignment = right if col == 4 else center
-            c.border = border
-        r += 1
-
-    widths1 = [20, 16, 24, 40]
-    for i, w in enumerate(widths1, 1):
-        ws1.column_dimensions[get_column_letter(i)].width = w
-    ws1.freeze_panes = "A3"
-
-    # ═══════════ الورقة 2: القراءات ═══════════
-    ws2 = wb.create_sheet("القراءات")
-    ws2.sheet_view.rightToLeft = True
-
-    ws2.merge_cells("A1:U1")
-    t2 = ws2["A1"]
-    t2.value = f"📊 قراءات الفرن: {kiln.name or ''}"
-    t2.font = Font(name="Arial", bold=True, size=16, color="FF4776E6")
-    t2.alignment = center
-    ws2.row_dimensions[1].height = 34
-
-    headers2 = [
-        "الوقت", "المرحلة", "حرارة حقيقية", "حرارة افتراضية", "الدرجة النهائية",
-        "الساعات الجارية", "وقت المرحلة", "مدة التثبيت", "دقائق التثبيت",
-        "ساعات متبقية", "دقائق متبقية",
-        "حرارة مرحلة1", "وقت مرحلة1", "حرارة مرحلة2", "وقت مرحلة2", "حرارة مرحلة3", "وقت مرحلة3",
-        "المراحل", "النزول التدريجي", "عطل الحساس", "الأسلاك",
-    ]
-    for col, h in enumerate(headers2, 1):
-        c = ws2.cell(row=2, column=col, value=h)
-        c.fill = header_fill; c.font = header_font; c.alignment = center; c.border = border
-    ws2.row_dimensions[2].height = 30
-
-    readings = db.query(Reading).filter(Reading.kiln_id == kiln_id).order_by(Reading.recorded_at.asc()).all()
-
-    r = 3
+    merged = []
     for rd in readings:
-        t = _local_time(rd.recorded_at, current_user.timezone or 'Asia/Muscat')
-        stage = H_NAMES.get(rd.H, "—")
-        vals = [
-            t, stage, rd.c1, rd.i1, rd.x,
-            rd.h, rd.t, rd.D, rd.mD,
-            rd.ht, rd.mt,
-            rd.x1, rd.t1, rd.x2, rd.t2, rd.x3, rd.t3,
-            "مفعّل" if rd.MARAHEL == 1 else "—",
-            "مفعّل" if rd.DOWN == 1 else "—",
-            "نعم" if rd.ElectricOff == 1 else "—",
-            rd.wiresActive if rd.wiresActive else "—",
-        ]
-        fill_color = STAGE_FILL.get(stage, "FFFFFFFF")
-        text_color = STAGE_TEXT.get(stage, "FF000000")
-        for col, v in enumerate(vals, 1):
-            c = ws2.cell(row=r, column=col, value=v)
-            c.fill = PatternFill("solid", fgColor=fill_color)
-            c.font = Font(name="Arial", size=10, color=text_color, bold=(col == 2))
-            c.alignment = center
-            c.border = border
+        merged.append((rd.recorded_at, "reading", rd))
+    for ev in events:
+        merged.append((ev.created_at, "event", ev))
+    # ترتيب زمني موحّد (نتعامل مع None بأمان)
+    merged.sort(key=lambda x: (x[0] is None, x[0]))
+
+    def onoff(v, yes="مفعّل", no="غير مفعّل"):
+        return yes if v == 1 else no
+
+    r = 3
+    for ts, kind, obj in merged:
+        if kind == "reading":
+            rd = obj
+            stage = H_NAMES.get(rd.H, "—")
+            vals = [
+                _local_time(rd.recorded_at, tz),
+                rd.c1, rd.i1, rd.x, rd.h, rd.t, rd.D, rd.mD, rd.ht, rd.mt,
+                stage,
+                onoff(rd.MARAHEL), onoff(rd.DOWN),
+                "تعمل" if rd.wiresActive not in (None, "", "0", 0) else "متوقفة",
+                "عطل" if rd.ElectricOff == 1 else "يعمل",
+                rd.x1, rd.t1, rd.x2, rd.t2, rd.x3, rd.t3,
+            ]
+            fill = STAGE_FILL.get(stage, "FFFFFFFF")
+            for col, v in enumerate(vals, 1):
+                c = ws.cell(row=r, column=col, value=v if v is not None else 0)
+                c.fill = PatternFill("solid", fgColor=fill)
+                c.font = Font(name="Arial", size=9, color="FF333333", bold=(col == 11))
+                c.alignment = center; c.border = border
+        else:
+            ev = obj
+            # العمود A: الوقت | الباقي مدموج: نص الحدث
+            tcell = ws.cell(row=r, column=1, value=_local_time(ev.created_at, tz)[11:19])
+            efill = EVENT_FILL.get(ev.type, "FF888888")
+            tcell.fill = PatternFill("solid", fgColor=efill)
+            tcell.font = Font(name="Arial", size=9, bold=True, color=EVENT_TEXT)
+            tcell.alignment = center; tcell.border = border
+
+            ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=NCOL)
+            msg = f"{ev.icon or ''}  {ev.title or ''}"
+            if ev.message:
+                msg += f"  —  {ev.message}"
+            ecell = ws.cell(row=r, column=2, value=msg)
+            ecell.fill = PatternFill("solid", fgColor=efill)
+            ecell.font = Font(name="Arial", size=10, bold=True, color=EVENT_TEXT)
+            ecell.alignment = Alignment(horizontal="right", vertical="center")
+            # حدود لكل خلايا الدمج
+            for col in range(2, NCOL + 1):
+                ws.cell(row=r, column=col).border = border
         r += 1
 
-    widths2 = [20, 16, 12, 13, 12, 12, 11, 11, 11, 11, 11, 12, 11, 12, 11, 12, 11, 10, 13, 11, 12]
-    for i, w in enumerate(widths2, 1):
-        ws2.column_dimensions[get_column_letter(i)].width = w
-    ws2.freeze_panes = "C3"
+    # ───── عرض الأعمدة + تجميد ─────
+    widths = [20, 13, 14, 12, 12, 14, 10, 14, 11, 11, 14, 11, 13, 12, 11, 13, 12, 13, 12, 13, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = "A3"
 
-    # ───── حفظ ─────
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
