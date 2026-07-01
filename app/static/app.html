@@ -348,6 +348,11 @@
        <label><input type="checkbox" class="tl-col" value="x" checked onchange="renderTimeline()"> الدرجة</label>
        <label><input type="checkbox" class="tl-col" value="h" onchange="renderTimeline()"> الساعات</label>
        <label><input type="checkbox" class="tl-col" value="stage" checked onchange="renderTimeline()"> المرحلة</label>
+       <label><input type="checkbox" class="tl-col" value="t" onchange="renderTimeline()"> وقت المرحلة الواحدة</label>
+       <label><input type="checkbox" class="tl-col" value="D" onchange="renderTimeline()"> مدة التثبيت</label>
+       <label><input type="checkbox" class="tl-col" value="t1" onchange="renderTimeline()"> وقت المرحلة 1</label>
+       <label><input type="checkbox" class="tl-col" value="t2" onchange="renderTimeline()"> وقت المرحلة 2</label>
+       <label><input type="checkbox" class="tl-col" value="t3" onchange="renderTimeline()"> وقت المرحلة 3</label>
      </div>
    </div>
 
@@ -1043,7 +1048,7 @@ function renderTimeline() {
 
  // الأعمدة المختارة
  const cols = Array.from(document.querySelectorAll('.tl-col:checked')).map(c => c.value);
- const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة' };
+ const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة', t:'وقت المرحلة', D:'مدة التثبيت', t1:'وقت م1', t2:'وقت م2', t3:'وقت م3' };
  const gridCols = '110px ' + cols.map(()=>'1fr').join(' ');
 
  let html = '<div class="tl-tbl">';
@@ -1061,9 +1066,10 @@ function renderTimeline() {
      html += '<span class="tl-t">'+((it.time||'').slice(0,10))+'<br><b style="color:#aaa;">'+((it.time||'').slice(11,19))+'</b></span>';
      cols.forEach(c => {
        let v = it[c];
+       const tempCols = ['c1','i1','x'];  // أعمدة الحرارة فقط تأخذ °
        if (c==='stage') v = it.stage || '—';
        else if (v==null) v = '—';
-       else if (c!=='h') v = v+'°';
+       else if (tempCols.includes(c)) v = v+'°';
        html += '<span class="tl-v">'+v+'</span>';
      });
      html += '</div>';

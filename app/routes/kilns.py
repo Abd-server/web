@@ -539,6 +539,7 @@ def get_timeline(kiln_id: str, period: str = "day", current_user: User = Depends
             "ts": rd.recorded_at.isoformat() if rd.recorded_at else "",
             "time": _local_time(rd.recorded_at, tz),
             "c1": rd.c1, "i1": rd.i1, "x": rd.x, "h": rd.h,
+            "t": rd.t, "D": rd.D, "t1": rd.t1, "t2": rd.t2, "t3": rd.t3,
             "H": rd.H, "stage": H_NAMES.get(rd.H, "—"),
             "MARAHEL": rd.MARAHEL, "DOWN": rd.DOWN,
         })
