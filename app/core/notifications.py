@@ -158,7 +158,7 @@ def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) 
         period = "صباحاً" if hour < 12 else "مساءً"
         h12 = hour % 12 or 12
         stamp = f"🗓️ {day_ar} · {now.day}/{now.month} · {h12}:{now.minute:02d} {period}"
-        message = f"{message}\n\n────────────\n{stamp}"
+        message = f"{message}\n\n{stamp}"
     except Exception:
         pass
 
