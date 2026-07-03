@@ -81,6 +81,7 @@ class Reading(Base):
     mD = Column("hold_now", Float, nullable=True)      # دقائق التثبيت الجارية
     ht = Column("rem_hours", Float, nullable=True)     # ساعات متبقية
     mt = Column("rem_mins", Float, nullable=True)      # دقائق متبقية
+    m  = Column("burn_mins_now", Float, nullable=True) # دقائق الحرق الجارية
 
     x1 = Column("stage1_temp", Float, nullable=True); t1 = Column("stage1_time", Float, nullable=True)
     x2 = Column("stage2_temp", Float, nullable=True); t2 = Column("stage2_time", Float, nullable=True)

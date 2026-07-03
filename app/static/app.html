@@ -232,7 +232,8 @@
 
    <div class="stats-grid">
      <div class="stat-card c-orange"><div class="stat-label">الدرجة النهائية</div><div class="stat-value" id="sx">--</div><div class="stat-unit">°C</div></div>
-     <div class="stat-card c-green"><div class="stat-label">الساعات الجارية</div><div class="stat-value" id="sh">--</div><div class="stat-unit">ساعة</div></div>
+     <div class="stat-card c-green"><div class="stat-label">ساعات الحرق الجارية</div><div class="stat-value" id="sh">--</div><div class="stat-unit">ساعة</div></div>
+     <div class="stat-card c-orange"><div class="stat-label">دقائق الحرق الجارية</div><div class="stat-value" id="sm">--</div><div class="stat-unit">دقيقة</div></div>
      <div class="stat-card c-blue"><div class="stat-label">وقت المرحلة الواحدة</div><div class="stat-value" id="st">--</div><div class="stat-unit">ساعة</div></div>
      <div class="stat-card c-pink"><div class="stat-label">مدة التثبيت</div><div class="stat-value" id="sD">--</div><div class="stat-unit">دقيقة</div></div>
      <div class="stat-card c-purple"><div class="stat-label">دقائق التثبيت الجارية</div><div class="stat-value" id="smD">--</div><div class="stat-unit">دقيقة</div></div>
@@ -732,6 +733,7 @@ async function refreshData() {
    document.getElementById('si1').textContent = fmt(last.i1, 1);
    document.getElementById('sx').textContent  = fmt(last.x, 0);
    document.getElementById('sh').textContent  = fmt(last.h, 1);
+   document.getElementById('sm').textContent  = (last.m != null ? fmt(last.m, 0) : '--');
    document.getElementById('st').textContent  = fmt(last.t, 1);
    document.getElementById('sD').textContent  = fmt(last.D, 0);
    document.getElementById('smD').textContent = fmt(last.mD, 0);

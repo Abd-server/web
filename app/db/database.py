@@ -80,3 +80,15 @@ def _migrate_telegram_columns():
                     ))
             except Exception:
                 pass  # العمود موجود مسبقاً
+
+    # ترحيل عمود دقائق الحرق الجارية (m) لجدول readings
+    reading_cols = {"burn_mins_now": "FLOAT"}
+    with engine.begin() as conn:
+        for name, sql_type in reading_cols.items():
+            try:
+                if is_sqlite:
+                    conn.execute(text(f"ALTER TABLE readings ADD COLUMN {name} {sql_type}"))
+                else:
+                    conn.execute(text(f"ALTER TABLE readings ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
+            except Exception:
+                pass

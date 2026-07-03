@@ -168,6 +168,109 @@ def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) 
     return False
 
 
+def _fmt_hm(total_minutes):
+    """يحوّل دقائق إلى نص 'X ساعة و Y دقيقة'."""
+    total_minutes = int(round(total_minutes))
+    h = total_minutes // 60
+    m = total_minutes % 60
+    if h > 0 and m > 0:
+        return f"{h} ساعة و{m} دقيقة"
+    if h > 0:
+        return f"{h} ساعة"
+    return f"{m} دقيقة"
+
+
+def _clock_after(minutes_from_now, tz_name):
+    """يرجّع وقت الساعة بعد إضافة دقائق للوقت الحالي بمنطقة العميل، صيغة 12-ساعة عربية."""
+    from datetime import datetime, timezone as _tz, timedelta
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(_tz.utc).astimezone(ZoneInfo(tz_name))
+    except Exception:
+        now = datetime.utcnow() + timedelta(hours=4)  # احتياطي عُمان
+    target = now + timedelta(minutes=minutes_from_now)
+    hour = target.hour
+    period = "صباحاً" if hour < 12 else "مساءً"
+    h12 = hour % 12
+    if h12 == 0:
+        h12 = 12
+    return f"{h12}:{target.minute:02d} {period}"
+
+
+def _extra_minutes_above_1000(final_temp):
+    """الوقت الإضافي بالدقائق للحرارة فوق 1000 (المعادلة: (x-1000)/0.0231 ثانية)."""
+    if final_temp is None or final_temp <= 1000:
+        return 0
+    seconds = (final_temp - 1000) / 0.0231
+    return seconds / 60.0
+
+
+def _build_firing_message(reading, tz_name):
+    """يبني نص إشعار الحرق التصاعدي المفصّل."""
+    r = reading
+    stages_on = (r.MARAHEL == 1)
+    down_on = (r.DOWN == 1)
+    lines = []
+
+    lines.append(f"🌡️ حرارة بداية التشغيل (الفعلية): {int(r.c1 or 0)}°")
+    lines.append(f"📊 الحرارة الافتراضية عند البداية: {int(r.i1 or 0)}°")
+
+    if not stages_on:
+        # بدون مراحل
+        lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
+        base_min = (r.t or 0) * 60   # وقت المرحلة الواحدة بالساعات → دقائق
+        lines.append(f"⏱️ عدد ساعات الحرقة: {_fmt_hm(base_min)}")
+        total_min = base_min
+    else:
+        # مع مراحل
+        lines.append("🔷 المراحل: مفعّلة")
+        lines.append(f"  • المرحلة 1: {int(r.x1 or 0)}° خلال {_fmt_hm((r.t1 or 0)*60)}")
+        lines.append(f"  • المرحلة 2: {int(r.x2 or 0)}° خلال {_fmt_hm((r.t2 or 0)*60)}")
+        lines.append(f"  • المرحلة 3: {int(r.x3 or 0)}° خلال {_fmt_hm((r.t3 or 0)*60)}")
+        lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
+        stages_min = ((r.t1 or 0) + (r.t2 or 0) + (r.t3 or 0)) * 60
+        extra_min = _extra_minutes_above_1000(r.x)   # الوقت الإضافي فوق 1000 (مع المراحل فقط)
+        total_min = stages_min + extra_min
+        if extra_min > 0:
+            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)} (منها {_fmt_hm(extra_min)} للحرارة فوق 1000°)")
+        else:
+            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)}")
+
+    lines.append(f"🔻 النزول التدريجي: {'مفعّل' if down_on else 'غير مفعّل'}")
+    lines.append(f"🧱 مدة التثبيت: {_fmt_hm((r.D or 0)*60) if r.D else '—'}")
+    lines.append(f"🕐 الوقت المتوقع لانتهاء الحرقة: {_clock_after(total_min, tz_name)}")
+
+    return "\n".join(lines)
+
+
+def _build_timer_message(reading, tz_name):
+    """يبني نص إشعار المؤقت: كل تفاصيل الحرق + الوقت المتبقي للتشغيل."""
+    r = reading
+    # الوقت المتبقي للتشغيل
+    rem_min = (r.ht or 0) * 60 + (r.mt or 0)
+    lines = []
+    lines.append(f"⏳ المتبقي لبدء التشغIل: {_fmt_hm(rem_min)}")
+    lines.append(f"🕐 الوقت المتوقع لبدء الحرق: {_clock_after(rem_min, tz_name)}")
+    lines.append("")
+    lines.append("— تفاصيل الحرقة القادمة —")
+    # نعيد استخدام بناء الحرق، لكن وقت الانتهاء يبدأ بعد المتبقي
+    firing = _build_firing_message(reading, tz_name)
+    lines.append(firing)
+    return "\n".join(lines)
+
+
+def _owner_timezone(kiln, db):
+    """يجلب المنطقة الزمنية لمالك الفرن."""
+    try:
+        from app.models.user import User
+        owner = db.query(User).filter(User.id == kiln.owner_id).first()
+        if owner and owner.timezone:
+            return owner.timezone
+    except Exception:
+        pass
+    return "Asia/Muscat"
+
+
 def process_reading_notifications(kiln, reading, db) -> None:
     """
     يفحص القراءة الجديدة ويرسل الإشعارات المناسبة، محدّثاً حالة الفرن.
@@ -180,7 +283,17 @@ def process_reading_notifications(kiln, reading, db) -> None:
     stage_color, stage_icon = _stage_style(H)
     if kiln.stage_notify and H is not None and H != kiln.last_stage and kiln.last_stage != -1:
         stage_name = H_NAMES.get(H, "--")
-        send_notification(kiln, f"{stage_icon} تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة", db=db)
+        tz_name = _owner_timezone(kiln, db)
+        if H == 2:
+            # الحرق التصاعدي — رسالة مفصّلة بالحسابات
+            detail = _build_firing_message(reading, tz_name)
+            send_notification(kiln, f"{stage_icon} بدأ الحرق التصاعدي\n\n{detail}", title="بدء الحرق التصاعدي", db=db)
+        elif H == 1:
+            # المؤقت — تفاصيل + الوقت المتبقي
+            detail = _build_timer_message(reading, tz_name)
+            send_notification(kiln, f"{stage_icon} المؤقت قيد التشغيل\n\n{detail}", title="المؤقت", db=db)
+        else:
+            send_notification(kiln, f"{stage_icon} تحوّل البرنامج إلى: {stage_name}", title="تحوّل المرحلة", db=db)
     if H is not None and H != kiln.last_stage:
         if kiln.last_stage != -1:
             # نسجّل الحدث في الأرشيف بلون وأيقونة المرحلة (حتى لو الإشعار معطّل)

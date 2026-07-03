@@ -49,6 +49,7 @@ class ReadingIngest(BaseModel):
     mD: Optional[float] = None
     ht: Optional[float] = None
     mt: Optional[float] = None
+    m:  Optional[float] = None
     x1: Optional[float] = None; t1: Optional[float] = None
     x2: Optional[float] = None; t2: Optional[float] = None
     x3: Optional[float] = None; t3: Optional[float] = None
@@ -67,7 +68,7 @@ class ReadingResponse(BaseModel):
     c1: Optional[float]; i1: Optional[float]; x: Optional[float]
     H: Optional[int]; h: Optional[float]; t: Optional[float]
     D: Optional[float]; mD: Optional[float]
-    ht: Optional[float]; mt: Optional[float]
+    ht: Optional[float]; mt: Optional[float]; m: Optional[float] = None
     x1: Optional[float]; t1: Optional[float]
     x2: Optional[float]; t2: Optional[float]
     x3: Optional[float]; t3: Optional[float]
