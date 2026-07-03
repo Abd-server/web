@@ -146,6 +146,22 @@ def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) 
     else:
         full_title = f"{color} {title}"
 
+    # طابع زمني أنيق بمنطقة العميل يُذيّل كل إشعار
+    try:
+        from datetime import datetime, timezone as _tz
+        from zoneinfo import ZoneInfo
+        tz_name = _owner_timezone(kiln, db) if db else "Asia/Muscat"
+        now = datetime.now(_tz.utc).astimezone(ZoneInfo(tz_name))
+        days = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+        day_ar = days[now.weekday()]
+        hour = now.hour
+        period = "صباحاً" if hour < 12 else "مساءً"
+        h12 = hour % 12 or 12
+        stamp = f"🗓️ {day_ar} · {now.day}/{now.month} · {h12}:{now.minute:02d} {period}"
+        message = f"{message}\n\n────────────\n{stamp}"
+    except Exception:
+        pass
+
     if kiln.notify_channel == "telegram":
         # البوت المركزي (المرحلة ب): توكن واحد + chat صاحب الفرن
         chat = _owner_telegram_chat(kiln, db)

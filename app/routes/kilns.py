@@ -118,6 +118,52 @@ def get_latest_reading(kiln_id: str, current_user: User = Depends(get_current_us
     return reading
 
 
+@router.get("/kilns/{kiln_id}/status")
+def get_connection_status(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """حالة اتصال الفرن: متصل لو وصلت قراءة خلال آخر دقيقتين."""
+    from datetime import datetime, timedelta
+    _get_owned_kiln(kiln_id, current_user, db)
+    last = (
+        db.query(Reading).filter(Reading.kiln_id == kiln_id)
+        .order_by(Reading.recorded_at.desc()).first()
+    )
+    if last is None or last.recorded_at is None:
+        return {"connected": False, "last_seen": None}
+    elapsed = (datetime.utcnow() - last.recorded_at).total_seconds()
+    return {"connected": elapsed <= 120, "last_seen": last.recorded_at.isoformat()}
+
+
+@router.post("/cron/check-offline")
+def cron_check_offline(db: Session = Depends(get_db)):
+    """
+    فحص دوري: يكتشف الأفران التي انقطعت (لم ترسل خلال 3 دقائق) ويُشعر أصحابها مرة واحدة.
+    يُستدعى من مؤقت خارجي (cron) كل بضع دقائق. لا يتطلب مصادقة مستخدم.
+    """
+    from datetime import datetime, timedelta
+    from app.core.notifications import send_notification
+    cutoff = datetime.utcnow() - timedelta(minutes=3)
+    notified = 0
+    # نفحص فقط الأفران التي كانت متصلة (was_online==1)
+    kilns = db.query(Kiln).filter(Kiln.was_online == 1).all()
+    for kiln in kilns:
+        last = (
+            db.query(Reading).filter(Reading.kiln_id == kiln.id)
+            .order_by(Reading.recorded_at.desc()).first()
+        )
+        if last is None or last.recorded_at is None:
+            continue
+        if last.recorded_at < cutoff:
+            # انقطع
+            try:
+                send_notification(kiln, "⚠️ انقطع اتصال الفرن بالإنترنت. لم تصل قراءات منذ أكثر من 3 دقائق.", title="انقطاع الاتصال", db=db)
+                kiln.was_online = 0
+                db.commit()
+                notified += 1
+            except Exception as e:
+                print(f"تنبيه: تعذّر إشعار الانقطاع: {e}")
+    return {"checked": len(kilns), "offline_notified": notified}
+
+
 @router.get("/kilns/{kiln_id}/device-key", response_model=KilnWithKeyResponse)
 def get_device_key(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """يرجّع مفتاح الجهاز للمالك (يُعرض من السيرفر، فيظهر على أي متصفح/جهاز)."""
@@ -183,6 +229,17 @@ def ingest_reading(body: ReadingIngest, kiln: Kiln = Depends(get_kiln_by_device_
         process_reading_notifications(kiln, reading, db)
     except Exception as e:
         print(f"تنبيه: تعذّرت معالجة الإشعارات: {e}")
+
+    # كشف الرجوع بعد انقطاع: لو كان منقطعاً ورجع يرسل، نُشعر العميل
+    try:
+        if kiln.was_online == 0:
+            from app.core.notifications import send_notification
+            send_notification(kiln, "✅ عاد الفرن للاتصال بالإنترنت ويرسل القراءات الآن.", title="عودة الاتصال", db=db)
+        if kiln.was_online != 1:
+            kiln.was_online = 1
+            db.commit()
+    except Exception as e:
+        print(f"تنبيه: تعذّر تحديث حالة الاتصال: {e}")
 
     return saved_reading if saved_reading else reading
 
@@ -540,6 +597,8 @@ def get_timeline(kiln_id: str, period: str = "day", current_user: User = Depends
             "time": _local_time(rd.recorded_at, tz),
             "c1": rd.c1, "i1": rd.i1, "x": rd.x, "h": rd.h,
             "t": rd.t, "D": rd.D, "t1": rd.t1, "t2": rd.t2, "t3": rd.t3, "m": rd.m,
+            "mD": rd.mD, "ht": rd.ht, "mt": rd.mt, "x1": rd.x1, "x2": rd.x2, "x3": rd.x3,
+            "wiresActive": rd.wiresActive, "ElectricOff": rd.ElectricOff,
             "H": rd.H, "stage": H_NAMES.get(rd.H, "—"),
             "MARAHEL": rd.MARAHEL, "DOWN": rd.DOWN,
         })

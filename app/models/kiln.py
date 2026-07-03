@@ -57,6 +57,7 @@ class Kiln(Base):
     telegram_chat   = Column(String, nullable=True)
     last_notified_temp = Column(Float, default=0, nullable=False)
     last_stage         = Column(Integer, default=-1, nullable=False)
+    was_online         = Column(Integer, default=-1, nullable=False)  # -1 مجهول، 1 متصل، 0 منقطع
 
     readings = relationship(
         "Reading", back_populates="kiln", cascade="all, delete-orphan"

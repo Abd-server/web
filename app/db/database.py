@@ -92,3 +92,15 @@ def _migrate_telegram_columns():
                     conn.execute(text(f"ALTER TABLE readings ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
             except Exception:
                 pass
+
+    # ترحيل عمود حالة الاتصال (was_online) لجدول kilns
+    kiln_cols = {"was_online": "INTEGER DEFAULT -1"}
+    with engine.begin() as conn:
+        for name, sql_type in kiln_cols.items():
+            try:
+                if is_sqlite:
+                    conn.execute(text(f"ALTER TABLE kilns ADD COLUMN {name} {sql_type}"))
+                else:
+                    conn.execute(text(f"ALTER TABLE kilns ADD COLUMN IF NOT EXISTS {name} {sql_type}"))
+            except Exception:
+                pass
