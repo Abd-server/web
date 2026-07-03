@@ -205,8 +205,16 @@ def _extra_minutes_above_1000(final_temp):
     return seconds / 60.0
 
 
-def _build_firing_message(reading, tz_name):
-    """يبني نص إشعار الحرق التصاعدي المفصّل."""
+def _gradual_down_minutes(final_temp):
+    """مدة النزول التدريجي بالدقائق: (x-200)/0.036111 ثانية."""
+    if final_temp is None or final_temp <= 200:
+        return 0
+    seconds = (final_temp - 200) / 0.036111
+    return seconds / 60.0
+
+
+def _build_firing_message(reading, tz_name, offset_min=0):
+    """يبني نص إشعار الحرق التصاعدي المفصّل. offset_min: دقائق تُضاف قبل بدء الحرق (للمؤقت)."""
     r = reading
     stages_on = (r.MARAHEL == 1)
     down_on = (r.DOWN == 1)
@@ -238,7 +246,16 @@ def _build_firing_message(reading, tz_name):
 
     lines.append(f"🔻 النزول التدريجي: {'مفعّل' if down_on else 'غير مفعّل'}")
     lines.append(f"🧱 مدة التثبيت: {int(r.D)} دقيقة" if r.D else "🧱 مدة التثبيت: —")
-    lines.append(f"🕐 الوقت المتوقع لانتهاء الحرقة: {_clock_after(total_min, tz_name)}")
+    lines.append(f"🕐 الوقت المتوقع لانتهاء الحرقة: {_clock_after(offset_min + total_min, tz_name)}")
+
+    # عند تفعيل النزول التدريجي: نضيف وقت انتهاء النزول (بعد الحرق)
+    if down_on:
+        down_min = _gradual_down_minutes(r.x)
+        total_with_down = total_min + down_min
+        lines.append(
+            f"❄️ ومع النزول التدريجي (يستغرق {_fmt_hm(down_min)})، "
+            f"ينتهي كل شيء الساعة: {_clock_after(offset_min + total_with_down, tz_name)}"
+        )
 
     return "\n".join(lines)
 
@@ -253,8 +270,8 @@ def _build_timer_message(reading, tz_name):
     lines.append(f"🕐 الوقت المتوقع لبدء الحرق: {_clock_after(rem_min, tz_name)}")
     lines.append("")
     lines.append("— تفاصيل الحرقة القادمة —")
-    # نعيد استخدام بناء الحرق، لكن وقت الانتهاء يبدأ بعد المتبقي
-    firing = _build_firing_message(reading, tz_name)
+    # نعيد استخدام بناء الحرق، مع إزاحة = الوقت المتبقي (فيبدأ حساب الانتهاء بعد التشغيل)
+    firing = _build_firing_message(reading, tz_name, offset_min=rem_min)
     lines.append(firing)
     return "\n".join(lines)
 
