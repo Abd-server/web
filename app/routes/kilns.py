@@ -406,13 +406,13 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
 
     headers = [
         "الوقت والتاريخ", "الحرارة الحقيقية", "الحرارة الافتراضية", "الدرجة النهائية",
-        "الساعات الجارية", "وقت المرحلة الواحدة", "مدة التثبيت", "دقائق التثبيت الجارية",
+        "ساعات الحرق الجارية", "دقائق الحرق الجارية", "وقت المرحلة الواحدة", "مدة التثبيت", "دقائق التثبيت الجارية",
         "ساعات متبقية", "دقائق متبقية", "حالة البرنامج", "المراحل", "النزول التدريجي",
         "حالة الأسلاك", "حالة الحساس",
         "حرارة المرحلة 1", "وقت المرحلة 1", "حرارة المرحلة 2", "وقت المرحلة 2",
         "حرارة المرحلة 3", "وقت المرحلة 3",
     ]
-    NCOL = len(headers)  # 21
+    NCOL = len(headers)  # 22
 
     # ───── العنوان الكبير ─────
     ws.merge_cells(f"A1:{get_column_letter(NCOL)}1")
@@ -451,7 +451,7 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
             stage = H_NAMES.get(rd.H, "—")
             vals = [
                 _local_time(rd.recorded_at, tz),
-                rd.c1, rd.i1, rd.x, rd.h, rd.t, rd.D, rd.mD, rd.ht, rd.mt,
+                rd.c1, rd.i1, rd.x, rd.h, rd.m, rd.t, rd.D, rd.mD, rd.ht, rd.mt,
                 stage,
                 onoff(rd.MARAHEL), onoff(rd.DOWN),
                 "تعمل" if rd.wiresActive not in (None, "", "0", 0) else "متوقفة",
@@ -487,7 +487,7 @@ def export_unified_xlsx(kiln_id: str, current_user: User = Depends(get_current_u
         r += 1
 
     # ───── عرض الأعمدة + تجميد ─────
-    widths = [20, 13, 14, 12, 12, 14, 10, 14, 11, 11, 14, 11, 13, 12, 11, 13, 12, 13, 12, 13, 12]
+    widths = [20, 13, 14, 12, 12, 13, 14, 10, 14, 11, 11, 14, 11, 13, 12, 11, 13, 12, 13, 12, 13, 12]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = "A3"
@@ -539,7 +539,7 @@ def get_timeline(kiln_id: str, period: str = "day", current_user: User = Depends
             "ts": rd.recorded_at.isoformat() if rd.recorded_at else "",
             "time": _local_time(rd.recorded_at, tz),
             "c1": rd.c1, "i1": rd.i1, "x": rd.x, "h": rd.h,
-            "t": rd.t, "D": rd.D, "t1": rd.t1, "t2": rd.t2, "t3": rd.t3,
+            "t": rd.t, "D": rd.D, "t1": rd.t1, "t2": rd.t2, "t3": rd.t3, "m": rd.m,
             "H": rd.H, "stage": H_NAMES.get(rd.H, "—"),
             "MARAHEL": rd.MARAHEL, "DOWN": rd.DOWN,
         })

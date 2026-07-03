@@ -354,6 +354,7 @@
        <label><input type="checkbox" class="tl-col" value="t1" onchange="renderTimeline()"> وقت المرحلة 1</label>
        <label><input type="checkbox" class="tl-col" value="t2" onchange="renderTimeline()"> وقت المرحلة 2</label>
        <label><input type="checkbox" class="tl-col" value="t3" onchange="renderTimeline()"> وقت المرحلة 3</label>
+       <label><input type="checkbox" class="tl-col" value="m" onchange="renderTimeline()"> دقائق الحرق</label>
      </div>
    </div>
 
@@ -1050,7 +1051,7 @@ function renderTimeline() {
 
  // الأعمدة المختارة
  const cols = Array.from(document.querySelectorAll('.tl-col:checked')).map(c => c.value);
- const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة', t:'وقت المرحلة', D:'مدة التثبيت', t1:'وقت م1', t2:'وقت م2', t3:'وقت م3' };
+ const colNames = { c1:'حرارة حقيقية', i1:'افتراضية', x:'الدرجة', h:'ساعة', stage:'المرحلة', t:'وقت المرحلة', D:'مدة التثبيت', t1:'وقت م1', t2:'وقت م2', t3:'وقت م3', m:'دقائق الحرق' };
  const gridCols = '110px ' + cols.map(()=>'1fr').join(' ');
 
  let html = '<div class="tl-tbl">';

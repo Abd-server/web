@@ -237,7 +237,7 @@ def _build_firing_message(reading, tz_name):
             lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)}")
 
     lines.append(f"🔻 النزول التدريجي: {'مفعّل' if down_on else 'غير مفعّل'}")
-    lines.append(f"🧱 مدة التثبيت: {_fmt_hm((r.D or 0)*60) if r.D else '—'}")
+    lines.append(f"🧱 مدة التثبيت: {int(r.D)} دقيقة" if r.D else "🧱 مدة التثبيت: —")
     lines.append(f"🕐 الوقت المتوقع لانتهاء الحرقة: {_clock_after(total_min, tz_name)}")
 
     return "\n".join(lines)
