@@ -163,12 +163,31 @@ def send_notification(kiln, message: str, title: str = "Kiln Monitor", db=None) 
         pass
 
     if kiln.notify_channel == "telegram":
-        # البوت المركزي (المرحلة ب): توكن واحد + chat صاحب الفرن
-        chat = _owner_telegram_chat(kiln, db)
-        if settings.telegram_configured() and chat:
-            _send_telegram(settings.TELEGRAM_BOT_TOKEN, chat, f"<b>{full_title}</b>\n{message}")
-            return True
-        # توافق خلفي: لو الفرن فيه توكن خاص قديم
+        if settings.telegram_configured():
+            body = f"<b>{full_title}</b>\n{message}"
+            sent_any = False
+            recipients = set()
+            # 1) صاحب الفرن (توافق خلفي)
+            owner_chat = _owner_telegram_chat(kiln, db)
+            if owner_chat:
+                recipients.add(owner_chat)
+            # 2) كل المشتركين المسجّلين لهذا الفرن (عدة أشخاص)
+            if db is not None:
+                try:
+                    from app.models.kiln import TelegramSubscriber
+                    subs = db.query(TelegramSubscriber).filter(TelegramSubscriber.kiln_id == kiln.id).all()
+                    for s in subs:
+                        if s.chat_id:
+                            recipients.add(s.chat_id)
+                except Exception as e:
+                    print(f"تنبيه: تعذّر جلب مشتركي تيليجرام: {e}")
+            # إرسال للجميع
+            for chat in recipients:
+                _send_telegram(settings.TELEGRAM_BOT_TOKEN, chat, body)
+                sent_any = True
+            if sent_any:
+                return True
+        # توافق خلفي: توكن خاص قديم
         if kiln.telegram_token and kiln.telegram_chat:
             _send_telegram(kiln.telegram_token, kiln.telegram_chat, f"<b>{full_title}</b>\n{message}")
             return True

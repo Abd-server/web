@@ -171,6 +171,39 @@ def get_device_key(kiln_id: str, current_user: User = Depends(get_current_user),
     return kiln
 
 
+@router.post("/kilns/{kiln_id}/telegram/subscribe-code")
+def create_kiln_tg_code(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """ينشئ رمز اشتراك تيليجرام لهذا الفرن — أي شخص يمسحه يصبح مشتركاً في إشعاراته."""
+    from app.core.config import settings
+    from app.core.telegram_bot import generate_kiln_link_code
+    if not settings.telegram_configured():
+        raise HTTPException(status_code=503, detail="بوت تيليجرام غير مُهيّأ")
+    kiln = _get_owned_kiln(kiln_id, current_user, db)
+    code = generate_kiln_link_code(kiln, db)
+    return {"code": code, "expires_minutes": 10, "bot_username": "KilnMonitor_bot",
+            "deep_link": f"https://t.me/KilnMonitor_bot?start={code}"}
+
+
+@router.get("/kilns/{kiln_id}/telegram/subscribers")
+def list_kiln_tg_subscribers(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """قائمة مشتركي تيليجرام لهذا الفرن."""
+    from app.models.kiln import TelegramSubscriber
+    _get_owned_kiln(kiln_id, current_user, db)
+    subs = db.query(TelegramSubscriber).filter(TelegramSubscriber.kiln_id == kiln_id).all()
+    return [{"id": s.id, "name": s.name or "مشترك", "created_at": s.created_at.isoformat() if s.created_at else None} for s in subs]
+
+
+@router.delete("/kilns/{kiln_id}/telegram/subscribers/{sub_id}")
+def remove_kiln_tg_subscriber(kiln_id: str, sub_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """يحذف مشترك تيليجرام من الفرن."""
+    from app.models.kiln import TelegramSubscriber
+    _get_owned_kiln(kiln_id, current_user, db)
+    sub = db.query(TelegramSubscriber).filter(TelegramSubscriber.id == sub_id, TelegramSubscriber.kiln_id == kiln_id).first()
+    if sub:
+        db.delete(sub); db.commit()
+    return {"message": "تم حذف المشترك"}
+
+
 @router.post("/kilns/{kiln_id}/rotate-key", response_model=KilnWithKeyResponse)
 def rotate_device_key(kiln_id: str, body: dict = Body(default={}), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # حماية: يجب إرسال تأكيد صريح (confirm=="تجديد") لمنع الضغط بالخطأ

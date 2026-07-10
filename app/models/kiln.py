@@ -58,6 +58,8 @@ class Kiln(Base):
     last_notified_temp = Column(Float, default=0, nullable=False)
     last_stage         = Column(Integer, default=-1, nullable=False)
     was_online         = Column(Integer, default=-1, nullable=False)  # -1 مجهول، 1 متصل، 0 منقطع
+    tg_link_code       = Column(String, nullable=True)   # رمز ربط تيليجرام مؤقت للفرن
+    tg_link_expires    = Column(DateTime, nullable=True)
 
     readings = relationship(
         "Reading", back_populates="kiln", cascade="all, delete-orphan"
@@ -120,3 +122,19 @@ class Event(Base):
 
 
 Index("ix_events_kiln_time", Event.kiln_id, Event.created_at)
+
+
+class TelegramSubscriber(Base):
+    """مشترك تيليجرام لفرن معيّن — يسمح بوصول إشعارات الفرن الواحد لعدة أشخاص."""
+    __tablename__ = "telegram_subscribers"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    kiln_id = Column(String, ForeignKey("kilns.id"), nullable=False, index=True)
+    chat_id = Column(String, nullable=False)          # معرّف محادثة تيليجرام
+    name = Column(String, nullable=True)               # اسم المشترك (من تيليجرام)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+
+Index("ix_tgsub_kiln", TelegramSubscriber.kiln_id, TelegramSubscriber.chat_id)

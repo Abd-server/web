@@ -93,8 +93,12 @@ def _migrate_telegram_columns():
             except Exception:
                 pass
 
-    # ترحيل عمود حالة الاتصال (was_online) لجدول kilns
-    kiln_cols = {"was_online": "INTEGER DEFAULT -1"}
+    # ترحيل أعمدة الفرن الجديدة (حالة الاتصال + ربط تيليجرام)
+    kiln_cols = {
+        "was_online": "INTEGER DEFAULT -1",
+        "tg_link_code": "VARCHAR",
+        "tg_link_expires": "TIMESTAMP",
+    }
     with engine.begin() as conn:
         for name, sql_type in kiln_cols.items():
             try:

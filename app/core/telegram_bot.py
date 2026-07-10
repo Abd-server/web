@@ -55,6 +55,47 @@ def generate_link_code(user, db) -> str:
     return code
 
 
+def generate_kiln_link_code(kiln, db) -> str:
+    """ينشئ رمز ربط مؤقت لفرن معيّن (لإضافة مشتركي تيليجرام)."""
+    code = "TGK" + "".join(random.choices("0123456789", k=6))
+    kiln.tg_link_code = code
+    kiln.tg_link_expires = datetime.now(timezone.utc) + timedelta(minutes=LINK_CODE_MINUTES)
+    db.commit()
+    return code
+
+
+def _match_kiln_link_code(code: str, db):
+    """يبحث عن فرن يملك رمز الربط هذا وغير منتهٍ. يرجّع الفرن أو None."""
+    from app.models.kiln import Kiln
+    code = code.strip().upper()
+    kiln = db.query(Kiln).filter(Kiln.tg_link_code == code).first()
+    if kiln is None:
+        return None
+    exp = kiln.tg_link_expires
+    if exp is not None:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > exp:
+            return None
+    return kiln
+
+
+def _add_kiln_subscriber(kiln, chat_id, name, db) -> bool:
+    """يضيف مشترك تيليجرام للفرن (لو غير موجود). يرجّع True لو أُضيف جديد."""
+    from app.models.kiln import TelegramSubscriber
+    existing = (
+        db.query(TelegramSubscriber)
+        .filter(TelegramSubscriber.kiln_id == kiln.id, TelegramSubscriber.chat_id == chat_id)
+        .first()
+    )
+    if existing:
+        return False
+    sub = TelegramSubscriber(kiln_id=kiln.id, chat_id=chat_id, name=name)
+    db.add(sub)
+    db.commit()
+    return True
+
+
 def _match_link_code(code: str, db):
     """يبحث عن مستخدم يملك رمز الربط هذا وغير منتهٍ. يرجّع المستخدم أو None."""
     from app.models.user import User
@@ -91,6 +132,26 @@ def handle_update(update: dict, db) -> None:
         payload = parts[1].strip() if len(parts) > 1 else ""
         # توحيد: تيليجرام لا يقبل الشرطة في معامل start، فنحوّل _ إلى -
         payload = payload.replace("_", "-")
+        # رمز ربط فرن (عدة مشتركين): TGK-xxxxxx
+        if payload.upper().startswith("TGK"):
+            kiln = _match_kiln_link_code(payload, db)
+            if kiln is not None:
+                sender = message.get("chat", {})
+                name = (sender.get("first_name", "") + " " + sender.get("last_name", "")).strip() or sender.get("username", "")
+                added = _add_kiln_subscriber(kiln, chat_id, name, db)
+                if added:
+                    send_message(
+                        chat_id,
+                        f"✅ <b>تم الاشتراك في إشعارات الفرن!</b>\n\n"
+                        f"🔥 الفرن: <b>{kiln.name or 'فرن'}</b>\n\n"
+                        f"ستصلك الآن إشعارات هذا الفرن: تغيّر المرحلة، درجات الحرارة، والتحذيرات.",
+                    )
+                else:
+                    send_message(chat_id, f"ℹ️ أنت مشترك بالفعل في إشعارات الفرن: <b>{kiln.name or 'فرن'}</b>")
+                return
+            send_message(chat_id, "⚠️ رمز الاشتراك منتهٍ أو غير صحيح. اطلب رمزاً جديداً من صفحة الفرن.")
+            return
+
         # لو فيه رمز ربط مرفق (من مسح QR) نربط مباشرة
         if payload.upper().startswith("TG-"):
             user = _match_link_code(payload, db)
