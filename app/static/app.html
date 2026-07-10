@@ -421,13 +421,17 @@
          <h4 style="color:#4aff9e;font-size:14px;margin:0;">👥 مشتركو هذا الفرن</h4>
          <span style="color:#777;font-size:11px;">إشعارات تصل عدة أشخاص</span>
        </div>
-       <p style="color:#999;font-size:12px;margin:0 0 10px;">شارك رمز الاشتراك مع أي شخص ليصله إشعارات هذا الفرن على تلجرام.</p>
-       <button class="btn btn-primary" style="width:100%;" onclick="getKilnSubCode()">➕ إضافة مشترك</button>
+       <p style="color:#999;font-size:12px;margin:0 0 10px;">شارك رمز الاشتراك الدائم مع أي شخص ليصله إشعارات هذا الفرن على تلجرام.</p>
+       <button class="btn btn-primary" style="width:100%;" onclick="getKilnSubCode(false)">📲 عرض رمز الاشتراك</button>
        <div id="kilnSubBox" class="hidden" style="margin-top:12px;background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;">
          <p style="color:#aaa;font-size:12px;margin:0 0 10px;text-align:center;">📱 امسح الكود بجوالك للاشتراك:</p>
          <div id="kilnSubQR" style="display:flex;justify-content:center;background:#fff;padding:12px;border-radius:10px;margin:0 auto 10px;width:fit-content;"></div>
-         <p style="color:#888;font-size:11px;margin:0;text-align:center;">صالح 10 دقائق. بعد المسح، اضغط «تحديث القائمة».</p>
-         <button class="mini-btn" style="width:100%;margin-top:10px;padding:9px;" onclick="loadKilnSubs()">🔄 تحديث القائمة</button>
+         <p style="color:#4aff9e;font-size:11px;margin:0;text-align:center;">✅ رمز دائم — شاركه مع من تريد في أي وقت</p>
+         <div style="display:flex;gap:8px;margin-top:10px;">
+           <button class="mini-btn" style="flex:1;padding:9px;" onclick="loadKilnSubs()">🔄 تحديث القائمة</button>
+           <button class="mini-btn" style="flex:1;padding:9px;color:#ff8a8a;" onclick="regenKilnSubCode()">♻️ تجديد الرمز</button>
+         </div>
+         <p style="color:#777;font-size:10px;margin:8px 0 0;text-align:center;">التجديد يُبطل الرمز القديم (للطوارئ لو تسرّب)</p>
        </div>
        <div id="kilnSubList" style="margin-top:12px;"></div>
      </div>
@@ -984,9 +988,11 @@ function copyTgCode() {
 }
 
 // ───── مشتركو الفرن (عدة أشخاص) ─────
-async function getKilnSubCode() {
+async function getKilnSubCode(forceNew) {
  if (!currentKiln) return;
- const r = await api('/kilns/' + currentKiln.id + '/telegram/subscribe-code', { method: 'POST' });
+ const r = await api('/kilns/' + currentKiln.id + '/telegram/subscribe-code', {
+   method: 'POST', body: JSON.stringify({ force_new: !!forceNew })
+ });
  if (r.ok) {
    const d = await r.json();
    const startParam = d.code.replace(/-/g, '_');
@@ -999,6 +1005,11 @@ async function getKilnSubCode() {
  } else {
    const d = await r.json(); alert('❌ ' + (d.detail || 'تعذّر إنشاء الرمز'));
  }
+}
+async function regenKilnSubCode() {
+ if (!confirm('تجديد الرمز يُبطل الرمز/الكود القديم. المشتركون الحاليون يبقون. متابعة؟')) return;
+ await getKilnSubCode(true);
+ alert('✅ تم تجديد الرمز. الكود القديم لم يعد يعمل.');
 }
 async function loadKilnSubs() {
  if (!currentKiln) return;

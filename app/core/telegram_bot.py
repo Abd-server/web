@@ -55,28 +55,26 @@ def generate_link_code(user, db) -> str:
     return code
 
 
-def generate_kiln_link_code(kiln, db) -> str:
-    """ينشئ رمز ربط مؤقت لفرن معيّن (لإضافة مشتركي تيليجرام)."""
+def generate_kiln_link_code(kiln, db, force_new=False) -> str:
+    """
+    يرجّع رمز اشتراك تيليجرام دائم للفرن.
+    - لو موجود ولم يُطلب التجديد: يُعيد نفس الرمز.
+    - لو غير موجود أو force_new: يولّد رمزاً جديداً (يبطل القديم).
+    """
+    if kiln.tg_link_code and not force_new:
+        return kiln.tg_link_code
     code = "TGK" + "".join(random.choices("0123456789", k=6))
     kiln.tg_link_code = code
-    kiln.tg_link_expires = datetime.now(timezone.utc) + timedelta(minutes=LINK_CODE_MINUTES)
+    kiln.tg_link_expires = None   # دائم — لا ينتهي
     db.commit()
     return code
 
 
 def _match_kiln_link_code(code: str, db):
-    """يبحث عن فرن يملك رمز الربط هذا وغير منتهٍ. يرجّع الفرن أو None."""
+    """يبحث عن فرن يملك رمز الاشتراك هذا. الرمز دائم (لا ينتهي). يرجّع الفرن أو None."""
     from app.models.kiln import Kiln
     code = code.strip().upper()
     kiln = db.query(Kiln).filter(Kiln.tg_link_code == code).first()
-    if kiln is None:
-        return None
-    exp = kiln.tg_link_expires
-    if exp is not None:
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > exp:
-            return None
     return kiln
 
 

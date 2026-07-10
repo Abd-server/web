@@ -172,15 +172,16 @@ def get_device_key(kiln_id: str, current_user: User = Depends(get_current_user),
 
 
 @router.post("/kilns/{kiln_id}/telegram/subscribe-code")
-def create_kiln_tg_code(kiln_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """ينشئ رمز اشتراك تيليجرام لهذا الفرن — أي شخص يمسحه يصبح مشتركاً في إشعاراته."""
+def create_kiln_tg_code(kiln_id: str, body: dict = Body(default={}), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """يرجّع رمز اشتراك تيليجرام دائم لهذا الفرن. force_new=true يجدّده (يبطل القديم)."""
     from app.core.config import settings
     from app.core.telegram_bot import generate_kiln_link_code
     if not settings.telegram_configured():
         raise HTTPException(status_code=503, detail="بوت تيليجرام غير مُهيّأ")
     kiln = _get_owned_kiln(kiln_id, current_user, db)
-    code = generate_kiln_link_code(kiln, db)
-    return {"code": code, "expires_minutes": 10, "bot_username": "KilnMonitor_bot",
+    force_new = bool(body.get("force_new", False))
+    code = generate_kiln_link_code(kiln, db, force_new=force_new)
+    return {"code": code, "permanent": True, "bot_username": "KilnMonitor_bot",
             "deep_link": f"https://t.me/KilnMonitor_bot?start={code}"}
 
 
