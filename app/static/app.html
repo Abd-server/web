@@ -806,7 +806,7 @@ async function refreshData() {
 
    const hInfo = hStatus[parseInt(last.H)] || { text: '--', cls: 'ps-0' };
    const hEl = document.getElementById('sH'); hEl.textContent = hInfo.text; hEl.className = 'program-badge ' + hInfo.cls;
-   document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + omanTime(last.recorded_at, 'time');
+   document.getElementById('lastUpdate').textContent = 'آخر تحديث: ' + omanTime(last.recorded_at, 'datetime');
 
    const recent = logs.slice(-50);
    chart.data.labels = recent.map(d => omanTime(d.recorded_at, 'time'));

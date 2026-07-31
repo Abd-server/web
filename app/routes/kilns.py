@@ -647,6 +647,6 @@ def get_timeline(kiln_id: str, period: str = "day", current_user: User = Depends
             "color": ev.color, "icon": ev.icon,
         })
 
-    # ترتيب زمني موحّد
-    items.sort(key=lambda x: x["ts"])
+    # ترتيب زمني موحّد — من الأحدث إلى الأقدم (القراءات الجديدة بالأعلى)
+    items.sort(key=lambda x: x["ts"], reverse=True)
     return {"kiln_name": kiln.name or "", "period": period, "count": len(items), "items": items}
