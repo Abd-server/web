@@ -53,6 +53,36 @@ def app_page():
     return FileResponse(os.path.join(_STATIC_DIR, "app.html"))
 
 
+# ─── أيقونات الموقع (favicon) ───
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(os.path.join(_STATIC_DIR, "favicon.ico"))
+
+@app.get("/favicon-16x16.png", include_in_schema=False)
+def favicon16():
+    return FileResponse(os.path.join(_STATIC_DIR, "favicon-16x16.png"))
+
+@app.get("/favicon-32x32.png", include_in_schema=False)
+def favicon32():
+    return FileResponse(os.path.join(_STATIC_DIR, "favicon-32x32.png"))
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def apple_icon():
+    return FileResponse(os.path.join(_STATIC_DIR, "apple-touch-icon.png"))
+
+@app.get("/icon-192.png", include_in_schema=False)
+def icon192():
+    return FileResponse(os.path.join(_STATIC_DIR, "icon-192.png"))
+
+@app.get("/icon-512.png", include_in_schema=False)
+def icon512():
+    return FileResponse(os.path.join(_STATIC_DIR, "icon-512.png"))
+
+@app.get("/og-image.png", include_in_schema=False)
+def og_image():
+    return FileResponse(os.path.join(_STATIC_DIR, "og-image.png"))
+
+
 @app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok", "message": "منصة الأفران تعمل"}
