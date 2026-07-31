@@ -474,6 +474,11 @@
      <input type="checkbox" id="stageEnabled" checked style="width:20px;height:20px;">
    </div>
 
+   <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;">
+     <span style="color:#aaa;font-size:13px;">⚠️ إشعار الحرارة الحرجة <small style="color:#777;">(قبل النهائية بـ 10°)</small></span>
+     <input type="checkbox" id="criticalEnabled" checked style="width:20px;height:20px;">
+   </div>
+
    <br>
    <button class="btn btn-primary" style="width:100%" onclick="saveNotify()">💾 حفظ الإعدادات</button>
    <br><br>
@@ -921,6 +926,7 @@ async function openNotify() {
      document.getElementById('notifyInterval').value = s.notify_interval;
      document.getElementById('notifyEnabled').checked = s.notify_enabled;
      document.getElementById('stageEnabled').checked = s.stage_notify;
+     document.getElementById('criticalEnabled').checked = (s.critical_notify !== false);
      // لا نعرض التوكنات (سرية)؛ نترك الحقول فارغة، وملؤها يحدّثها فقط
      document.getElementById('poUser').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'u...';
      document.getElementById('poToken').placeholder = s.pushover_configured ? '✓ مضبوط — اتركه فارغاً للإبقاء' : 'a...';
@@ -934,6 +940,7 @@ async function saveNotify() {
    notify_channel: notifyChannel,
    notify_enabled: document.getElementById('notifyEnabled').checked,
    stage_notify: document.getElementById('stageEnabled').checked,
+   critical_notify: document.getElementById('criticalEnabled').checked,
    notify_interval: parseInt(document.getElementById('notifyInterval').value) || 100,
  };
  // التوكنات تُرسل فقط لو المستخدم كتب شيئاً

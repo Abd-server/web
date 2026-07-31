@@ -86,6 +86,7 @@ class NotifySettings(BaseModel):
     notify_enabled:  Optional[bool] = None
     notify_interval: Optional[int]  = None
     stage_notify:    Optional[bool] = None
+    critical_notify: Optional[bool] = None
     pushover_token:  Optional[str]  = None
     pushover_user:   Optional[str]  = None
     telegram_token:  Optional[str]  = None
@@ -98,6 +99,7 @@ class NotifySettingsResponse(BaseModel):
     notify_enabled: bool
     notify_interval: int
     stage_notify: bool
+    critical_notify: bool = True
     pushover_configured: bool
     telegram_configured: bool
 

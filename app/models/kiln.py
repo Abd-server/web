@@ -51,6 +51,8 @@ class Kiln(Base):
     notify_enabled  = Column(Integer, default=1, nullable=False)
     notify_interval = Column(Integer, default=100, nullable=False)
     stage_notify    = Column(Integer, default=1, nullable=False)
+    critical_notify = Column(Integer, default=1, nullable=False)  # إشعار الحرارة الحرجة (قبل النهائية بـ 10°)
+    critical_sent   = Column(Integer, default=0, nullable=False)  # هل أُرسل في الحريقة الحالية (يمنع التكرار)
     pushover_token  = Column(String, nullable=True)
     pushover_user   = Column(String, nullable=True)
     telegram_token  = Column(String, nullable=True)

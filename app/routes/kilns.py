@@ -325,6 +325,7 @@ def get_notify(kiln_id: str, current_user: User = Depends(get_current_user), db:
         notify_enabled=bool(kiln.notify_enabled),
         notify_interval=kiln.notify_interval,
         stage_notify=bool(kiln.stage_notify),
+        critical_notify=bool(getattr(kiln, "critical_notify", 1)),
         pushover_configured=bool(kiln.pushover_token and kiln.pushover_user),
         telegram_configured=bool(kiln.telegram_token and kiln.telegram_chat),
     )
@@ -337,6 +338,7 @@ def set_notify(kiln_id: str, body: NotifySettings, current_user: User = Depends(
     # حقول منطقية تُحوّل لأرقام
     if "notify_enabled" in data: kiln.notify_enabled = 1 if data["notify_enabled"] else 0
     if "stage_notify"   in data: kiln.stage_notify   = 1 if data["stage_notify"] else 0
+    if "critical_notify" in data: kiln.critical_notify = 1 if data["critical_notify"] else 0
     if "notify_interval" in data: kiln.notify_interval = int(data["notify_interval"])
     if "notify_channel"  in data: kiln.notify_channel  = data["notify_channel"]
     # التوكنات (تُحفظ كما هي)

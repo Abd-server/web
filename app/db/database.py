@@ -98,6 +98,8 @@ def _migrate_telegram_columns():
         "was_online": "INTEGER DEFAULT -1",
         "tg_link_code": "VARCHAR",
         "tg_link_expires": "TIMESTAMP",
+        "critical_notify": "INTEGER DEFAULT 1",
+        "critical_sent": "INTEGER DEFAULT 0",
     }
     with engine.begin() as conn:
         for name, sql_type in kiln_cols.items():

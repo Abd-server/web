@@ -352,12 +352,22 @@ def process_reading_notifications(kiln, reading, db) -> None:
             log_event(db, kiln.id, "stage", f"{stage_icon} المرحلة: {H_NAMES.get(H, '--')}",
                       message=f"تحوّل البرنامج إلى مرحلة: {H_NAMES.get(H, '--')}",
                       color=stage_color, icon=stage_icon)
+        # تصفير عدّاد الإشعار الدوري عند بداية حريقة جديدة (حرق تصاعدي أو مؤقت)
+        # كي تتجدّد الإشعارات الدورية تلقائياً كل حريقة دون تدخّل يدوي.
+        if H in (1, 2):
+            kiln.last_notified_temp = 0
+            kiln.critical_sent = 0   # نعيد تفعيل إشعار الحرارة الحرجة للحريقة الجديدة
         kiln.last_stage = H
         changed = True
 
     # 2) إشعار دوري كل notify_interval درجة
     c1 = reading.c1
     if kiln.notify_enabled and c1 is not None and kiln.notify_interval > 0:
+        # حماية إضافية: لو الفرن برد كثيراً (الحرارة نزلت 100° تحت آخر إشعار)،
+        # نصفّر العدّاد ليبدأ من جديد في الحريقة القادمة تلقائياً.
+        if c1 < kiln.last_notified_temp - 100:
+            kiln.last_notified_temp = 0
+            changed = True
         if c1 >= kiln.last_notified_temp + kiln.notify_interval:
             kiln.last_notified_temp = (int(c1) // kiln.notify_interval) * kiln.notify_interval
             send_notification(kiln, f"🌡️ الحرارة وصلت إلى {int(c1)}°C", db=db)
@@ -365,8 +375,23 @@ def process_reading_notifications(kiln, reading, db) -> None:
                       message=f"وصلت الحرارة إلى {int(c1)}°C", color="#ffb74d", icon="🔔")
             changed = True
 
-    # 3) تحذير تجاوز الدرجة النهائية
+    # 3) إشعار الحرارة الحرجة (قبل الدرجة النهائية بـ 10°) — مرة واحدة لكل حريقة
     x = reading.x
+    if (getattr(kiln, "critical_notify", 0) == 1 and not getattr(kiln, "critical_sent", 0)
+            and c1 is not None and x is not None and x > 10 and H in (2, 3)):
+        if c1 >= x - 10:
+            send_notification(
+                kiln,
+                f"⚠️ اقتربت من الحرارة النهائية!\n\n🌡️ الحرارة الآن: {int(c1)}°\n🎯 الهدف النهائي: {int(x)}°\n\nتبقّى نحو {int(x - c1)}° فقط.",
+                title="🔥 تنبيه الحرارة الحرجة",
+                db=db,
+            )
+            log_event(db, kiln.id, "notification", f"⚠️ حرارة حرجة {int(c1)}°",
+                      message=f"اقتربت من النهائية ({int(x)}°)", color="#ff5722", icon="⚠️")
+            kiln.critical_sent = 1
+            changed = True
+
+    # 4) تحذير تجاوز الدرجة النهائية
     if c1 is not None and x is not None and H not in (None, 0) and c1 > x + 5:
         send_notification(
             kiln,
