@@ -248,32 +248,81 @@ def _gradual_down_minutes(final_temp):
     return seconds / 60.0
 
 
-def _build_firing_message(reading, tz_name, offset_min=0):
+def _single_stage_minutes(start_temp, final_temp, hours):
+    """
+    زمن الحرق للمرحلة الواحدة بالدقائق.
+    المعدّل ثابت محسوب كأن الحرارة تبدأ من الصفر: المعدّل = النهائية / (t×3600).
+    ثم الزمن الفعلي = (النهائية - الأولية الفعلية) / المعدّل.
+    فكلما بدأ الفرن أسخن، قلّ الزمن.
+    """
+    if hours is None or hours <= 0 or final_temp is None or final_temp <= 0:
+        return 0
+    start = start_temp if start_temp is not None else 0
+    remaining = final_temp - start
+    if remaining <= 0:
+        return 0
+    rate_per_sec = final_temp / (hours * 3600.0)   # درجة/ثانية (كأنه من الصفر)
+    if rate_per_sec <= 0:
+        return 0
+    seconds = remaining / rate_per_sec
+    return seconds / 60.0
+
+
+def _staged_minutes(start_temp, x1, t1, x2, t2, x3, t3, final_temp):
+    """
+    زمن الحرق مع المراحل (الطريقة ب): كل مرحلة معدّلها = (نهايتها - نهاية السابقة) / وقتها.
+    نحسب الوقت المتبقي حسب موقع الحرارة الفعلية:
+    - المراحل المنتهية (الحرارة تعدّتها) تُتخطّى.
+    - المرحلة الحالية: نحسب المتبقي منها فقط.
+    - المراحل القادمة: كاملة.
+    + الوقت الإضافي فوق 1000 للدرجة النهائية.
+    """
+    start = start_temp if start_temp is not None else 0
+    total = 0.0
+    prev_end = 0   # نهاية المرحلة السابقة (تبدأ من الصفر لحساب المعدّل)
+    for xn, tn in [(x1, t1), (x2, t2), (x3, t3)]:
+        if xn is None or tn is None or tn <= 0 or xn <= prev_end:
+            if xn is not None:
+                prev_end = xn
+            continue
+        span = xn - prev_end                       # مدى المرحلة
+        rate_per_sec = span / (tn * 3600.0)        # معدّل المرحلة (ب): من نهاية السابقة
+        # حرارة دخول هذه المرحلة فعلياً = الأكبر بين (بداية الفرن) و(نهاية المرحلة السابقة)
+        entry = max(start, prev_end)
+        if entry < xn and rate_per_sec > 0:
+            remaining = xn - entry                 # المتبقي في هذه المرحلة
+            total += (remaining / rate_per_sec) / 60.0
+        prev_end = xn
+    total += _extra_minutes_above_1000(final_temp)
+    return total
+
+
+def _build_firing_message(reading, tz_name, offset_min=0, start_temp=None):
     """يبني نص إشعار الحرق التصاعدي المفصّل. offset_min: دقائق تُضاف قبل بدء الحرق (للمؤقت)."""
     r = reading
     stages_on = (r.MARAHEL == 1)
     down_on = (r.DOWN == 1)
+    # الحرارة الأولية: المخزّنة عند بدء الحرق، وإلا c1 الحالية
+    init_temp = start_temp if start_temp is not None else (r.c1 or 0)
     lines = []
 
-    lines.append(f"🌡️ حرارة بداية التشغيل (الفعلية): {int(r.c1 or 0)}°")
+    lines.append(f"🌡️ حرارة بداية التشغيل (الفعلية): {int(init_temp)}°")
     lines.append(f"📊 الحرارة الافتراضية عند البداية: {int(r.i1 or 0)}°")
 
     if not stages_on:
-        # بدون مراحل
+        # بدون مراحل — الوقت من معدّل التسخين الفعلي
         lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
-        base_min = (r.t or 0) * 60   # وقت المرحلة الواحدة بالساعات → دقائق
-        lines.append(f"⏱️ عدد ساعات الحرقة: {_fmt_hm(base_min)}")
-        total_min = base_min
+        total_min = _single_stage_minutes(init_temp, r.x, r.t)
+        lines.append(f"⏱️ عدد ساعات الحرقة: {_fmt_hm(total_min)}")
     else:
-        # مع مراحل
+        # مع مراحل — كل مرحلة بمعدّلها + الوقت الإضافي فوق 1000
         lines.append("🔷 المراحل: مفعّلة")
         lines.append(f"  • المرحلة 1: {int(r.x1 or 0)}° خلال {_fmt_hm((r.t1 or 0)*60)}")
         lines.append(f"  • المرحلة 2: {int(r.x2 or 0)}° خلال {_fmt_hm((r.t2 or 0)*60)}")
         lines.append(f"  • المرحلة 3: {int(r.x3 or 0)}° خلال {_fmt_hm((r.t3 or 0)*60)}")
         lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
-        stages_min = ((r.t1 or 0) + (r.t2 or 0) + (r.t3 or 0)) * 60
-        extra_min = _extra_minutes_above_1000(r.x)   # الوقت الإضافي فوق 1000 (مع المراحل فقط)
-        total_min = stages_min + extra_min
+        extra_min = _extra_minutes_above_1000(r.x)
+        total_min = _staged_minutes(init_temp, r.x1, r.t1, r.x2, r.t2, r.x3, r.t3, r.x)
         if extra_min > 0:
             lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)} (منها {_fmt_hm(extra_min)} للحرارة فوق 1000°)")
         else:
@@ -337,8 +386,8 @@ def process_reading_notifications(kiln, reading, db) -> None:
         stage_name = H_NAMES.get(H, "--")
         tz_name = _owner_timezone(kiln, db)
         if H == 2:
-            # الحرق التصاعدي — رسالة مفصّلة بالحسابات
-            detail = _build_firing_message(reading, tz_name)
+            # الحرق التصاعدي — رسالة مفصّلة بالحسابات (الحرارة الأولية = المخزّنة لحظة البدء)
+            detail = _build_firing_message(reading, tz_name, start_temp=kiln.firing_start_temp)
             send_notification(kiln, f"{stage_icon} بدأ الحرق التصاعدي\n\n{detail}", title="بدء الحرق التصاعدي", db=db)
         elif H == 1:
             # المؤقت — تفاصيل + الوقت المتبقي
@@ -357,6 +406,9 @@ def process_reading_notifications(kiln, reading, db) -> None:
         if H in (1, 2):
             kiln.last_notified_temp = 0
             kiln.critical_sent = 0   # نعيد تفعيل إشعار الحرارة الحرجة للحريقة الجديدة
+        if H == 2:
+            # نخزّن الحرارة الفعلية لحظة دخول الحرق التصاعدي (للحساب الدقيق للوقت)
+            kiln.firing_start_temp = reading.c1
         kiln.last_stage = H
         changed = True
 

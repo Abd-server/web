@@ -100,6 +100,7 @@ def _migrate_telegram_columns():
         "tg_link_expires": "TIMESTAMP",
         "critical_notify": "INTEGER DEFAULT 1",
         "critical_sent": "INTEGER DEFAULT 0",
+        "firing_start_temp": "FLOAT",
     }
     with engine.begin() as conn:
         for name, sql_type in kiln_cols.items():
