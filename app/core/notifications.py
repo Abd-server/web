@@ -417,9 +417,10 @@ def process_reading_notifications(kiln, reading, db) -> None:
         kiln.last_stage = H
         changed = True
 
-    # 2) إشعار دوري كل notify_interval درجة
+    # 2) إشعار دوري كل notify_interval درجة — فقط في المؤقت (1) والحرق التصاعدي (2)
+    #    يتوقف في التثبيت والنزول والانتهاء.
     c1 = reading.c1
-    if kiln.notify_enabled and c1 is not None and kiln.notify_interval > 0:
+    if kiln.notify_enabled and c1 is not None and kiln.notify_interval > 0 and H in (1, 2):
         # حماية إضافية: لو الفرن برد كثيراً (الحرارة نزلت 100° تحت آخر إشعار)،
         # نصفّر العدّاد ليبدأ من جديد في الحريقة القادمة تلقائياً.
         if c1 < kiln.last_notified_temp - 100:
