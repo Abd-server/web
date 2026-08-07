@@ -310,10 +310,12 @@ def _build_firing_message(reading, tz_name, offset_min=0, start_temp=None):
     lines.append(f"📊 الحرارة الافتراضية عند البداية: {int(r.i1 or 0)}°")
 
     if not stages_on:
-        # بدون مراحل — الوقت من معدّل التسخين الفعلي
+        # بدون مراحل
         lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
+        # العرض: وقت الحرقة كما اختاره العميل (t)
+        lines.append(f"⏱️ عدد ساعات الحرقة: {_fmt_hm((r.t or 0)*60)}")
+        # الحساب الدقيق للوقت المتوقع للانتهاء (حسب الحرارة الأولية)
         total_min = _single_stage_minutes(init_temp, r.x, r.t)
-        lines.append(f"⏱️ عدد ساعات الحرقة: {_fmt_hm(total_min)}")
     else:
         # مع مراحل — كل مرحلة بمعدّلها + الوقت الإضافي فوق 1000
         lines.append("🔷 المراحل: مفعّلة")
@@ -322,11 +324,14 @@ def _build_firing_message(reading, tz_name, offset_min=0, start_temp=None):
         lines.append(f"  • المرحلة 3: {int(r.x3 or 0)}° خلال {_fmt_hm((r.t3 or 0)*60)}")
         lines.append(f"🎯 الدرجة النهائية: {int(r.x or 0)}°")
         extra_min = _extra_minutes_above_1000(r.x)
+        # العرض: مجموع أوقات المراحل كما اختارها العميل + الإضافي فوق 1000
+        display_min = ((r.t1 or 0) + (r.t2 or 0) + (r.t3 or 0)) * 60 + extra_min
+        # الحساب الدقيق للوقت المتوقع (حسب الحرارة الأولية وموقعها من المراحل)
         total_min = _staged_minutes(init_temp, r.x1, r.t1, r.x2, r.t2, r.x3, r.t3, r.x)
         if extra_min > 0:
-            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)} (منها {_fmt_hm(extra_min)} للحرارة فوق 1000°)")
+            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(display_min)} (منها {_fmt_hm(extra_min)} للحرارة فوق 1000°)")
         else:
-            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(total_min)}")
+            lines.append(f"⏱️ زمن الحرق الكلي: {_fmt_hm(display_min)}")
 
     lines.append(f"🔻 النزول التدريجي: {'مفعّل' if down_on else 'غير مفعّل'}")
     lines.append(f"🧱 مدة التثبيت: {int(r.D)} دقيقة" if r.D else "🧱 مدة التثبيت: —")
