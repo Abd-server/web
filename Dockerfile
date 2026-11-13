@@ -12,7 +12,7 @@ WORKDIR /app
 
 # تثبيت المتطلبات أولاً (طبقة Docker مخبّأة لتسريع البناء)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip uninstall -y setuptools wheel
 
 # نسخ الكود
 COPY . .
